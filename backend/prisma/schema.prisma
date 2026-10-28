@@ -8,27 +8,28 @@ datasource db {
 }
 
 model User {
-  id              String         @id @default(uuid())
-  email           String         @unique
-  passwordHash    String
-  firstName       String
-  lastName        String?
-  phone           String?        @unique
-  role            UserRole       @default(CUSTOMER)
-  termsAcceptedAt DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  isVerified      Boolean        @default(false)
-  otpCode         String?
-  otpExpiresAt    DateTime?
-  otpAttempts     Int            @default(0)
-  passwordResetCode         String?
-  passwordResetExpiresAt    DateTime?
-  passwordResetAttempts     Int            @default(0)
-  appointments    Appointment[]
-  business        Business?
-  businessStaff   BusinessStaff?
-  soleProvider    SoleProvider?
+  id                     String            @id @default(uuid())
+  email                  String            @unique
+  passwordHash           String
+  firstName              String
+  lastName               String?
+  phone                  String?           @unique
+  role                   UserRole          @default(CUSTOMER)
+  termsAcceptedAt        DateTime?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  isVerified             Boolean           @default(false)
+  otpCode                String?
+  otpExpiresAt           DateTime?
+  otpAttempts            Int               @default(0)
+  passwordResetCode      String?
+  passwordResetExpiresAt DateTime?
+  passwordResetAttempts  Int               @default(0)
+  appointments           Appointment[]
+  business               Business?
+  businessStaff          BusinessStaff?
+  soleProvider           SoleProvider?
+  staffInvitationsSent   StaffInvitation[] @relation("StaffInvitedBy")
 }
 
 model SoleProvider {
@@ -50,28 +51,30 @@ model SoleProvider {
 }
 
 model Business {
-  id            String                 @id @default(uuid())
-  ownerUserId   String                 @unique
-  name          String
-  category      String?
-  staffSize     String?
-  email         String?
-  phone         String?                @unique
-  address       String?
-  description   String?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  appointments  Appointment[]
-  owner         User                   @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  staff         BusinessStaff[]
-  subscriptions ProviderSubscription[]
-  services      Service[]
+  id               String                 @id @default(uuid())
+  ownerUserId      String                 @unique
+  name             String
+  category         String?
+  staffSize        String?
+  email            String?
+  phone            String?                @unique
+  address          String?
+  description      String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  appointments     Appointment[]
+  owner            User                   @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  staff            BusinessStaff[]
+  subscriptions    ProviderSubscription[]
+  staffInvitations StaffInvitation[]
+  services         Service[]
 }
 
 model BusinessStaff {
   id           String         @id @default(uuid())
   businessId   String
   userId       String         @unique
+  isActive     Boolean        @default(true)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   appointments Appointment[]
@@ -79,6 +82,22 @@ model BusinessStaff {
   business     Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   services     StaffService[]
+}
+
+model StaffInvitation {
+  id              String    @id @default(uuid())
+  businessId      String
+  invitedByUserId String
+  email           String
+  tokenHash       String    @unique
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  business        Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invitedBy       User      @relation("StaffInvitedBy", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, email, acceptedAt])
+  @@index([expiresAt])
 }
 
 model Package {
