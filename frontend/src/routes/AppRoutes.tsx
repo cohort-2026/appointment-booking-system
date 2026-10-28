@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 
 import PublicLayout from "../layouts/PublicLayout";
+import AdminLayout from "../layouts/AdminLayout";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { RoleRoute } from "./RoleRoute";
 
@@ -24,11 +25,20 @@ import CustomerRegister from "../pages/public/register/CustomerRegister";
 import ProviderRegister from "../pages/public/register/ProviderRegister";
 import BusinessRegister from "../pages/public/register/BusinessRegister";
 
-// Customer dashboard
+// Dashboards
 import ClientDashboard from "../pages/dashboard/customer/Dashboard";
 import ProviderDashboard from "../pages/dashboard/provider/Dashboard";
 import BusinessDashboard from "../pages/dashboard/business/Dashboard";
+
+// Admin pages
 import AdminDashboard from "../pages/dashboard/admin/Dashboard";
+import AdminUsers from "../pages/dashboard/admin/User";
+import AdminBusinesses from "../pages/dashboard/admin/Businesses";
+import AdminProviders from "../pages/dashboard/admin/Providers";
+import AdminSubscriptions from "../pages/dashboard/admin/Subscriptions";
+import AdminReports from "../pages/dashboard/admin/Reports";
+import AdminAppointments from "../pages/dashboard/admin/Appointments";
+import AdminServices from "../pages/dashboard/admin/Services";
 
 export default function AppRoutes() {
   return (
@@ -87,16 +97,27 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
+      {/* Admin dashboard (layout + nested pages) */}
       <Route
         path="/dashboard/admin"
         element={
           <ProtectedRoute>
             <RoleRoute allowedRoles={["ADMIN"]}>
-              <AdminDashboard />
+              <AdminLayout />
             </RoleRoute>
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<AdminDashboard />} />
+        <Route path="users" element={<AdminUsers />} />
+        <Route path="businesses" element={<AdminBusinesses />} />
+        <Route path="providers" element={<AdminProviders />} />
+        <Route path="appointments" element={<AdminAppointments />} />
+        <Route path="services" element={<AdminServices />} />
+        <Route path="subscriptions" element={<AdminSubscriptions />} />
+        <Route path="reports" element={<AdminReports />} />
+      </Route>
     </Routes>
   );
 }
