@@ -59,6 +59,7 @@ import BusinessAnalytics from "../pages/dashboard/business/Analytics";
 // Other dashboards
 import StaffOverview from "../pages/dashboard/staff/Overview";
 import StaffAppointments from "../pages/dashboard/staff/Appointments";
+import StaffAvailability from "../pages/dashboard/staff/Availability";
 import StaffProfile from "../pages/dashboard/staff/Profile";
 import AdminDashboard from "../pages/dashboard/admin/Dashboard";
 
@@ -170,6 +171,7 @@ export default function AppRoutes() {
       >
         <Route index element={<StaffOverview />} />
         <Route path="appointments" element={<StaffAppointments />} />
+        <Route path="availability" element={<StaffAvailability />} />
         <Route path="profile" element={<StaffProfile />} />
       </Route>
 
