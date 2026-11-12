@@ -616,6 +616,7 @@ export const getBusinessAppointments = async (req: AuthenticatedRequest, res: Re
         service: appointment.service.name,
         durationMinutes: appointment.service.durationMinutes,
         price: appointment.service.expectedPrice === null ? null : Number(appointment.service.expectedPrice),
+        staffId: appointment.staffId,
         staffName: appointment.staff
           ? `${appointment.staff.user.firstName} ${appointment.staff.user.lastName ?? ""}`.trim()
           : null,
