@@ -23,11 +23,11 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { label: "Dashboard", icon: "▦", to: "/dashboard/admin", end: true },
-  { label: "Users", icon: "♙", to: "/dashboard/admin/users" },
+  { label: "Clients", icon: "♙", to: "/dashboard/admin/users" },
   { label: "Businesses", icon: "◈", to: "/dashboard/admin/businesses" },
   { label: "Providers", icon: "◷", to: "/dashboard/admin/providers" },
-  { label: "Appointments", icon: "▤", to: "/dashboard/admin/appointments" },
-  { label: "Services", icon: "◉", to: "/dashboard/admin/services" },
+//   { label: "Appointments", icon: "▤", to: "/dashboard/admin/appointments" },
+//   { label: "Services", icon: "◉", to: "/dashboard/admin/services" },
   { label: "Subscriptions", icon: "◇", to: "/dashboard/admin/subscriptions" },
   { label: "Reports", icon: "▣", to: "/dashboard/admin/reports" },
 ];

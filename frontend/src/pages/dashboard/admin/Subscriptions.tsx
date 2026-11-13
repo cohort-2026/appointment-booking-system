@@ -1,21 +1,20 @@
 import { useState } from "react";
+import {
+  canAddProvider,
+  planLimits,
+  type Plan,
+} from "../../../utils/providerLimits";
 
-type Plan = "Basic" | "Growth";
-type SubStatus = "Active" | "Trial" | "Cancelled";
+type SubStatus = "Active" | "Trial" | "Paused" | "Cancelled";
 
 type Subscription = {
   id: string;
   business: string;
   plan: Plan;
   status: SubStatus;
+  pausedFrom?: SubStatus;
   providersUsed: number;
   renews: string;
-};
-
-// How many providers each plan allows
-const planLimits: Record<Plan, number> = {
-  Basic: 3,
-  Growth: 10,
 };
 
 const mockSubscriptions: Subscription[] = [
@@ -24,7 +23,7 @@ const mockSubscriptions: Subscription[] = [
     business: "Riverside Wellness",
     plan: "Basic",
     status: "Trial",
-    providersUsed: 5,
+    providersUsed: 3,
     renews: "2026-11-11",
   },
   {
@@ -56,37 +55,57 @@ const mockSubscriptions: Subscription[] = [
 const statusStyles: Record<SubStatus, string> = {
   Active: "bg-emerald-50 text-emerald-700",
   Trial: "bg-sky-50 text-sky-700",
-  Cancelled: "bg-slate-100 text-slate-600",
+  Paused: "bg-slate-100 text-slate-700",
+  Cancelled: "bg-red-50 text-red-700",
 };
-
-const selectClass =
-  "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-sky-400";
 
 const cardClass =
   "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm";
 
+const pauseButtonClass =
+  "text-sm font-semibold text-amber-600 hover:underline";
+
+const resumeButtonClass =
+  "text-sm font-semibold text-emerald-600 hover:underline";
+
 export default function Subscriptions() {
   const [subs, setSubs] = useState<Subscription[]>(mockSubscriptions);
 
-  const changePlan = (id: string, plan: Plan) => {
+  const pauseSubscription = (id: string) => {
     setSubs((current) =>
-      current.map((s) => (s.id === id ? { ...s, plan } : s))
+      current.map((s) =>
+        s.id === id ? { ...s, status: "Paused", pausedFrom: s.status } : s
+      )
     );
   };
 
-  const isOverLimit = (s: Subscription) =>
-    s.providersUsed > planLimits[s.plan];
+  const resumeSubscription = (id: string) => {
+    setSubs((current) =>
+      current.map((s) =>
+        s.id === id
+          ? { ...s, status: s.pausedFrom ?? "Active", pausedFrom: undefined }
+          : s
+      )
+    );
+  };
+
+  const isFull = (s: Subscription) =>
+    !canAddProvider(s.plan, s.providersUsed);
+
+  const canPause = (s: Subscription) =>
+    s.status === "Active" || s.status === "Trial";
 
   const activeCount = subs.filter((s) => s.status === "Active").length;
-  const growthCount = subs.filter((s) => s.plan === "Growth").length;
-  const overLimitCount = subs.filter(isOverLimit).length;
+  const pausedCount = subs.filter((s) => s.status === "Paused").length;
+  const fullCount = subs.filter(isFull).length;
 
   return (
     <section>
       <div className="mb-6">
         <h2 className="text-xl font-bold tracking-tight">Subscriptions</h2>
         <p className="mt-1 text-sm text-slate-500">
-          View plans, capacity limits and upgrades.
+          View each business&apos;s plan and capacity. Pause a subscription if
+          something looks wrong.
         </p>
       </div>
 
@@ -97,14 +116,14 @@ export default function Subscriptions() {
           <p className="mt-2 text-3xl font-bold">{activeCount}</p>
         </div>
         <div className={cardClass}>
-          <p className="text-sm text-slate-500">On Growth plan</p>
-          <p className="mt-2 text-3xl font-bold">{growthCount}</p>
+          <p className="text-sm text-slate-500">Paused</p>
+          <p className="mt-2 text-3xl font-bold text-slate-600">
+            {pausedCount}
+          </p>
         </div>
         <div className={cardClass}>
-          <p className="text-sm text-slate-500">Over provider limit</p>
-          <p className="mt-2 text-3xl font-bold text-amber-600">
-            {overLimitCount}
-          </p>
+          <p className="text-sm text-slate-500">At provider limit</p>
+          <p className="mt-2 text-3xl font-bold">{fullCount}</p>
         </div>
       </div>
 
@@ -118,6 +137,7 @@ export default function Subscriptions() {
               <th className="px-5 py-3 font-semibold">Providers</th>
               <th className="px-5 py-3 font-semibold">Status</th>
               <th className="px-5 py-3 font-semibold">Renews</th>
+              <th className="px-5 py-3 text-right font-semibold">Actions</th>
             </tr>
           </thead>
 
@@ -125,30 +145,11 @@ export default function Subscriptions() {
             {subs.map((s) => (
               <tr key={s.id}>
                 <td className="px-5 py-4 font-semibold">{s.business}</td>
-                <td className="px-5 py-4">
-                  <select
-                    value={s.plan}
-                    onChange={(e) => changePlan(s.id, e.target.value as Plan)}
-                    className={selectClass}
-                  >
-                    <option value="Basic">Basic</option>
-                    <option value="Growth">Growth</option>
-                  </select>
-                </td>
-                <td className="px-5 py-4">
-                  <span
-                    className={
-                      isOverLimit(s)
-                        ? "font-semibold text-amber-600"
-                        : "text-slate-700"
-                    }
-                  >
-                    {s.providersUsed} / {planLimits[s.plan]}
-                  </span>
-                  {isOverLimit(s) && (
-                    <span className="ml-2 text-xs text-amber-600">
-                      Over limit
-                    </span>
+                <td className="px-5 py-4 text-slate-700">{s.plan}</td>
+                <td className="px-5 py-4 text-slate-700">
+                  {s.providersUsed} / {planLimits[s.plan]}
+                  {isFull(s) && (
+                    <span className="ml-2 text-xs text-slate-500">Full</span>
                   )}
                 </td>
                 <td className="px-5 py-4">
@@ -159,6 +160,26 @@ export default function Subscriptions() {
                   </span>
                 </td>
                 <td className="px-5 py-4 text-slate-500">{s.renews}</td>
+                <td className="px-5 py-4 text-right">
+                  {canPause(s) && (
+                    <button
+                      type="button"
+                      onClick={() => pauseSubscription(s.id)}
+                      className={pauseButtonClass}
+                    >
+                      Pause
+                    </button>
+                  )}
+                  {s.status === "Paused" && (
+                    <button
+                      type="button"
+                      onClick={() => resumeSubscription(s.id)}
+                      className={resumeButtonClass}
+                    >
+                      Resume
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

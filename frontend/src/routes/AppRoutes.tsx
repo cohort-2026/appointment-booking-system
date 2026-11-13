@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 
 import PublicLayout from "../layouts/PublicLayout";
 import AdminLayout from "../layouts/AdminLayout";
@@ -32,13 +32,13 @@ import BusinessDashboard from "../pages/dashboard/business/Dashboard";
 
 // Admin pages
 import AdminDashboard from "../pages/dashboard/admin/Dashboard";
-import AdminUsers from "../pages/dashboard/admin/User";
+import AdminClients from "../pages/dashboard/admin/User";
 import AdminBusinesses from "../pages/dashboard/admin/Businesses";
 import AdminProviders from "../pages/dashboard/admin/Providers";
 import AdminSubscriptions from "../pages/dashboard/admin/Subscriptions";
 import AdminReports from "../pages/dashboard/admin/Reports";
-import AdminAppointments from "../pages/dashboard/admin/Appointments";
-import AdminServices from "../pages/dashboard/admin/Services";
+// import AdminAppointments from "../pages/dashboard/admin/Appointments";
+// import AdminServices from "../pages/dashboard/admin/Services";
 
 export default function AppRoutes() {
   return (
@@ -109,14 +109,13 @@ export default function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<AdminDashboard />} />
-        <Route path="users" element={<AdminUsers />} />
+                <Route index element={<AdminDashboard />} />
+        <Route path="clients" element={<AdminClients />} />
         <Route path="businesses" element={<AdminBusinesses />} />
         <Route path="providers" element={<AdminProviders />} />
-        <Route path="appointments" element={<AdminAppointments />} />
-        <Route path="services" element={<AdminServices />} />
         <Route path="subscriptions" element={<AdminSubscriptions />} />
         <Route path="reports" element={<AdminReports />} />
+       <Route path="*" element={<Navigate to="/dashboard/admin" replace />} />
       </Route>
     </Routes>
   );

@@ -141,7 +141,7 @@ export default function AdminDashboard() {
             </div>
 
             <button
-              onClick={() => navigate("/dashboard/admin/users")}
+              onClick={() => navigate("/dashboard/admin/clients")}
               className="text-sm font-semibold hover:underline"
               style={{ color: ACCENT_FROM }}
             >
@@ -206,11 +206,11 @@ export default function AdminDashboard() {
 
       {/* Quick actions */}
       <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <QuickAction
+                <QuickAction
           icon="♙"
-          label="Manage users"
-          description="Search, edit and suspend user accounts."
-          onClick={() => navigate("/dashboard/admin/users")}
+          label="Manage clients"
+          description="Search, edit and suspend client accounts."
+          onClick={() => navigate("/dashboard/admin/clients")}
         />
 
         <QuickAction

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-type ProviderStatus = "Approved" | "Pending" | "Suspended";
+type ProviderStatus = "Approved" | "Pending" | "Paused" | "Suspended";
 type ProviderType = "Sole provider" | "Business staff";
 
 type Provider = {
@@ -55,11 +55,15 @@ const mockProviders: Provider[] = [
 const statusStyles: Record<ProviderStatus, string> = {
   Approved: "bg-emerald-50 text-emerald-700",
   Pending: "bg-amber-50 text-amber-700",
+  Paused: "bg-slate-100 text-slate-700",
   Suspended: "bg-red-50 text-red-700",
 };
 
 const inputClass =
   "rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-sky-400";
+
+const statusSelectClass =
+  "cursor-pointer rounded-full border-0 px-3 py-1 text-xs font-semibold outline-none";
 
 export default function Providers() {
   const [providers, setProviders] = useState<Provider[]>(mockProviders);
@@ -121,6 +125,7 @@ export default function Providers() {
           <option value="ALL">All statuses</option>
           <option value="Approved">Approved</option>
           <option value="Pending">Pending</option>
+          <option value="Paused">Paused</option>
           <option value="Suspended">Suspended</option>
         </select>
       </div>
@@ -134,7 +139,6 @@ export default function Providers() {
               <th className="px-5 py-3 font-semibold">Type</th>
               <th className="px-5 py-3 font-semibold">Services</th>
               <th className="px-5 py-3 font-semibold">Status</th>
-              <th className="px-5 py-3 text-right font-semibold">Actions</th>
             </tr>
           </thead>
 
@@ -150,31 +154,21 @@ export default function Providers() {
                   {p.services.join(", ")}
                 </td>
                 <td className="px-5 py-4">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${statusStyles[p.status]}`}
+                  <select
+                    value={p.status}
+                    aria-label={`Change status for ${p.name}`}
+                    onChange={(e) =>
+                      updateStatus(p.id, e.target.value as ProviderStatus)
+                    }
+                    className={`${statusSelectClass} ${statusStyles[p.status]}`}
                   >
-                    {p.status}
-                  </span>
-                </td>
-                <td className="px-5 py-4 text-right">
-                  {p.status !== "Approved" && (
-                    <button
-                      type="button"
-                      onClick={() => updateStatus(p.id, "Approved")}
-                      className="mr-3 text-sm font-semibold text-emerald-600 hover:underline"
-                    >
-                      Approve
-                    </button>
-                  )}
-                  {p.status !== "Suspended" && (
-                    <button
-                      type="button"
-                      onClick={() => updateStatus(p.id, "Suspended")}
-                      className="text-sm font-semibold text-red-600 hover:underline"
-                    >
-                      Suspend
-                    </button>
-                  )}
+                    <option value="Pending" disabled>
+                      Pending
+                    </option>
+                    <option value="Approved">Approved</option>
+                    <option value="Paused">Paused</option>
+                    <option value="Suspended">Suspended</option>
+                  </select>
                 </td>
               </tr>
             ))}
@@ -182,7 +176,7 @@ export default function Providers() {
             {filteredProviders.length === 0 && (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={4}
                   className="px-5 py-10 text-center text-slate-500"
                 >
                   No providers match your search.
