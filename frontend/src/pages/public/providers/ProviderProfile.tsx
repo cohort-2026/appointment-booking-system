@@ -8,6 +8,7 @@ import { getVerificationEmail } from "../../../services/auth";
 import type { Provider, ProviderService } from "../../../types/providers";
 
 const SERVICES_PER_PAGE = 6;
+const BOOKING_DRAFT_KEY = "appointment-booking-draft";
 
 function localDateString(date: Date): string {
   const year = date.getFullYear();
@@ -21,15 +22,16 @@ function formatBookingDate(date: Date): string {
     weekday: "short",
     month: "short",
     day: "numeric",
-    hour: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
+    hourCycle: "h23",
   }).format(date);
 }
 
 export default function ProviderProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, login } = useAuth();
+  const { user, login, loading: authLoading } = useAuth();
   const [providerState, setProviderState] = useState<{ id: string; provider: Provider | null; error: string | null }>({ id: "", provider: null, error: null });
   const [servicePageState, setServicePageState] = useState({ id: "", page: 1 });
   const [bookingService, setBookingService] = useState<ProviderService | null>(null);
@@ -52,6 +54,12 @@ export default function ProviderProfile() {
   const servicePage = servicePageState.id === id ? servicePageState.page : 1;
 
   useEffect(() => {
+    if (authLoading || !signInOpen || user?.role !== "CUSTOMER") return;
+    setSignInOpen(false);
+    navigate("/dashboard/customer", { replace: true });
+  }, [authLoading, signInOpen, user?.role, navigate]);
+
+  useEffect(() => {
     if (!id) return;
     let active = true;
     void fetchProvider(id)
@@ -62,6 +70,36 @@ export default function ProviderProfile() {
       });
     return () => { active = false; };
   }, [id]);
+
+  // Keep the customer's in-progress selection while they sign in or verify a new account.
+  useEffect(() => {
+    if (!provider || typeof window === "undefined") return;
+    try {
+      const draft = JSON.parse(window.localStorage.getItem(BOOKING_DRAFT_KEY) ?? "null") as
+        | { providerId?: string; serviceId?: string; date?: string; startsAt?: string; staffId?: string }
+        | null;
+      if (!draft || draft.providerId !== provider.id || !draft.serviceId) return;
+      const service = provider.services.find((item) => item.id === draft.serviceId);
+      if (!service) return;
+      setBookingService(service);
+      if (draft.date) setBookingDate(draft.date);
+      if (draft.startsAt) setBookingTime(draft.startsAt);
+      if (draft.staffId) setBookingStaff(draft.staffId);
+    } catch {
+      window.localStorage.removeItem(BOOKING_DRAFT_KEY);
+    }
+  }, [provider?.id]);
+
+  useEffect(() => {
+    if (!bookingService || !provider || typeof window === "undefined") return;
+    window.localStorage.setItem(BOOKING_DRAFT_KEY, JSON.stringify({
+      providerId: provider.id,
+      serviceId: bookingService.id,
+      date: bookingDate,
+      ...(bookingTime ? { startsAt: bookingTime } : {}),
+      ...(bookingStaff ? { staffId: bookingStaff } : {}),
+    }));
+  }, [provider?.id, bookingService?.id, bookingDate, bookingTime, bookingStaff]);
 
   useEffect(() => {
     if (!provider || !bookingService || !bookingDate) return;
@@ -149,12 +187,14 @@ export default function ProviderProfile() {
         startsAt: bookingTime,
         ...(provider.kind === "BUSINESS" ? { staffId: bookingStaff } : {}),
       });
-      toast.success(`Booked ${response.appointment.service} for ${formatBookingDate(new Date(response.appointment.startsAt))}.`);
+      window.localStorage.removeItem(BOOKING_DRAFT_KEY);
+      toast.success("Appointment confirmed.");
       setSignInOpen(false);
       setSignInError(null);
       setBookingService(null);
       setBookingTime(null);
       setAvailabilityReload((current) => current + 1);
+      navigate(`/dashboard/customer/appointments/${encodeURIComponent(response.appointment.id)}?confirmed=1`, { replace: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to create appointment.";
       toast.error(message);
@@ -199,7 +239,9 @@ export default function ProviderProfile() {
       }
 
       setSignInOpen(false);
-      await submitBooking();
+      setSignInError(null);
+      toast.success("Signed in successfully.");
+      navigate("/dashboard/customer", { replace: true });
     } catch (error) {
       const unverifiedEmail = getVerificationEmail(error);
       if (unverifiedEmail) {
@@ -422,7 +464,7 @@ export default function ProviderProfile() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="booking-preview-title"
-            className="my-auto w-full max-w-2xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+            className="my-auto max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white shadow-2xl"
           >
             <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-7">
               <div>
@@ -433,7 +475,7 @@ export default function ProviderProfile() {
               </div>
               <button
                 type="button"
-                onClick={() => setBookingService(null)}
+                onClick={() => { window.localStorage.removeItem(BOOKING_DRAFT_KEY); setBookingService(null); }}
                 aria-label="Close booking form"
                 className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               >
@@ -560,9 +602,9 @@ export default function ProviderProfile() {
         </div>
       )}
 
-      {signInOpen && bookingService && (
+      {signInOpen && bookingService && !authLoading && user?.role !== "CUSTOMER" && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-slate-950/65 p-4 backdrop-blur-sm sm:items-center"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && !signInSubmitting) {
               setSignInOpen(false);
@@ -574,7 +616,7 @@ export default function ProviderProfile() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="booking-sign-in-title"
-            className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+            className="my-auto max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white shadow-2xl"
           >
             <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6">
               <div>
@@ -641,10 +683,10 @@ export default function ProviderProfile() {
                 disabled={signInSubmitting || bookingSubmitting}
                 className="w-full rounded-lg bg-sky-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {signInSubmitting ? "Signing in..." : "Sign in and book"}
+                {signInSubmitting ? "Signing in..." : "Sign in"}
               </button>
               <p className="text-center text-sm text-slate-600">
-                New here? <Link to="/register" className="font-semibold text-sky-700 hover:underline">Get Started</Link>
+                New here? <Link to="/register/customer" onClick={() => setSignInOpen(false)} className="font-semibold text-sky-700 hover:underline">Create a customer account</Link>
               </p>
             </form>
           </section>

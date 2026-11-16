@@ -78,6 +78,39 @@ export async function sendPasswordResetEmail(
   );
 }
 
+export async function sendAppointmentConfirmationEmail(input: {
+  to: string;
+  firstName: string;
+  serviceName: string;
+  providerName: string;
+  startsAt: Date;
+  durationMinutes: number;
+  appointmentUrl: string;
+}): Promise<void> {
+  const appointmentDate = new Intl.DateTimeFormat("en-ZA", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "Africa/Johannesburg",
+  }).format(input.startsAt);
+  const safeFirstName = escapeHtml(input.firstName);
+  const safeServiceName = escapeHtml(input.serviceName);
+  const safeProviderName = escapeHtml(input.providerName);
+  const safeAppointmentDate = escapeHtml(appointmentDate);
+  const safeAppointmentUrl = escapeHtml(input.appointmentUrl);
+
+  await sendEmail(
+    input.to,
+    `Appointment confirmed: ${input.serviceName}`,
+    `Hi ${input.firstName}, your appointment for ${input.serviceName} with ${input.providerName} is confirmed for ${appointmentDate}. Duration: ${input.durationMinutes} minutes. View your saved appointment: ${input.appointmentUrl}`,
+    `<p>Hi ${safeFirstName},</p><p>Your appointment is confirmed.</p><ul><li><strong>Service:</strong> ${safeServiceName}</li><li><strong>Provider:</strong> ${safeProviderName}</li><li><strong>Date and time:</strong> ${safeAppointmentDate}</li><li><strong>Duration:</strong> ${input.durationMinutes} minutes</li></ul><p><a href="${safeAppointmentUrl}">View your saved appointment</a></p>`,
+  );
+}
+
 export async function sendStaffInvitationEmail(
   to: string,
   firstName: string,

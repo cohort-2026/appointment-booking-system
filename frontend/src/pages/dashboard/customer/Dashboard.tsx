@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiFetch } from "../../../services/api";
 
@@ -8,6 +8,10 @@ type Appointment = {
   time: string;
   service: string;
   providerName: string;
+  staffName: string | null;
+  staffTitle: string | null;
+  durationMinutes: number;
+  price: string | null;
   status: string;
 };
 
@@ -45,7 +49,10 @@ const dashboardLinks = [
 
 export default function CustomerDashboard() {
   const { user } = useAuth();
+  const location = useLocation();
+  const bookedAppointmentId = new URLSearchParams(location.search).get("bookedAppointment");
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const [justBookedAppointment, setJustBookedAppointment] = useState<Appointment | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,6 +74,27 @@ export default function CustomerDashboard() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!bookedAppointmentId) return;
+
+    let active = true;
+    void apiFetch<{ success: boolean; upcoming: Appointment[]; past: Appointment[] }>("/customer/appointments")
+      .then((response) => {
+        if (!active) return;
+        const appointments = [...(response.upcoming ?? []), ...(response.past ?? [])];
+        setJustBookedAppointment(appointments.find((item) => item.id === bookedAppointmentId) ?? null);
+      })
+      .catch((reason: unknown) => {
+        if (active) {
+          setError(reason instanceof Error ? reason.message : "Your booking details could not be loaded.");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [bookedAppointmentId]);
 
   const stats = dashboard?.stats;
   const statItems = [
@@ -100,6 +128,27 @@ export default function CustomerDashboard() {
         <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           Could not load dashboard information: {error}
         </div>
+      )}
+
+      {bookedAppointmentId && justBookedAppointment && (
+        <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm" aria-label="Newly booked appointment">
+          <div className="border-b border-emerald-100 bg-emerald-50 px-5 py-4 sm:px-6">
+            <p className="text-sm font-bold text-emerald-900">Your appointment is booked</p>
+            <p className="mt-1 text-sm text-emerald-800">Here are the details you selected.</p>
+          </div>
+          <div className="grid gap-5 p-5 sm:grid-cols-2 sm:p-6">
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Service</p><p className="mt-1 font-semibold text-slate-900">{justBookedAppointment.service}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Provider</p><p className="mt-1 font-semibold text-slate-900">{justBookedAppointment.providerName}</p></div>
+            {justBookedAppointment.staffName && <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Assigned staff</p><p className="mt-1 font-semibold text-slate-900">{justBookedAppointment.staffName}{justBookedAppointment.staffTitle ? ` · ${justBookedAppointment.staffTitle}` : ""}</p></div>}
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Date and time</p><p className="mt-1 font-semibold text-slate-900">{new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "short" }).format(new Date(justBookedAppointment.time))}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Duration</p><p className="mt-1 font-semibold text-slate-900">{justBookedAppointment.durationMinutes} minutes</p></div>
+            {justBookedAppointment.price !== null && <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Price</p><p className="mt-1 font-semibold text-slate-900">R{justBookedAppointment.price}</p></div>}
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p><p className="mt-1 font-semibold capitalize text-slate-900">{justBookedAppointment.status.toLowerCase().replaceAll("_", " ")}</p></div>
+          </div>
+          <div className="border-t border-slate-100 px-5 py-4 sm:px-6">
+            <Link to={`/dashboard/customer/appointments/${encodeURIComponent(justBookedAppointment.id)}`} className="text-sm font-semibold text-sky-700 hover:text-sky-900">Open appointment details →</Link>
+          </div>
+        </section>
       )}
 
       <section aria-label="Appointment summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -162,6 +211,15 @@ export default function CustomerDashboard() {
                 <div>
                   <p className="font-semibold">{appointment.service}</p>
                   <p className="mt-1 text-sm text-slate-500">with {appointment.providerName}</p>
+                  {appointment.staffName && (
+                    <p className="mt-1 text-sm text-slate-500">
+                      Staff: {appointment.staffName}{appointment.staffTitle ? ` · ${appointment.staffTitle}` : ""}
+                    </p>
+                  )}
+                  <p className="mt-1 text-sm text-slate-500">
+                    Duration: {appointment.durationMinutes} minutes
+                    {appointment.price !== null ? ` · Price: R${appointment.price}` : ""}
+                  </p>
                 </div>
                 <div className="flex items-center justify-between gap-4 sm:justify-end">
                   <p className="text-sm text-slate-600">
