@@ -1,14 +1,17 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { fetchProvider } from "../../../services/providers";
 import { createAppointment, fetchProviderAvailability, type ProviderAvailabilityResponse } from "../../../services/bookings";
 import { useAuth } from "../../../hooks/useAuth";
 import { getVerificationEmail } from "../../../services/auth";
+import { bookingDraftPath, clearBookingDraft, draftBelongsToCustomer, isBookingDraftExpired, readBookingDraft, saveBookingDraft } from "../../../lib/bookingDraft";
+import { validateBookingSelection } from "../../../lib/bookingFlow";
+import { ApiError } from "../../../services/api";
 import type { Provider, ProviderService } from "../../../types/providers";
 
 const SERVICES_PER_PAGE = 6;
-const BOOKING_DRAFT_KEY = "appointment-booking-draft";
+
 
 function localDateString(date: Date): string {
   const year = date.getFullYear();
@@ -31,6 +34,14 @@ function formatBookingDate(date: Date): string {
 export default function ProviderProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [bookingNotice, setBookingNotice] = useState(() => {
+    const message = (location.state as { bookingNotice?: unknown } | null)?.bookingNotice;
+    return typeof message === "string" ? message : "";
+  });
+  const restoredFor = useRef("");
+  const submitting = useRef(false);
+  const selectedTime = useRef<string | null>(null);
   const { user, login, loading: authLoading } = useAuth();
   const [providerState, setProviderState] = useState<{ id: string; provider: Provider | null; error: string | null }>({ id: "", provider: null, error: null });
   const [servicePageState, setServicePageState] = useState({ id: "", page: 1 });
@@ -39,7 +50,7 @@ export default function ProviderProfile() {
   const [bookingTime, setBookingTime] = useState<string | null>(null);
   const [bookingStaff, setBookingStaff] = useState("");
   const [bookingAvailability, setBookingAvailability] = useState<ProviderAvailabilityResponse | null>(null);
-  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [resolvedAvailabilityKey, setResolvedAvailabilityKey] = useState("");
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
   const [availabilityReload, setAvailabilityReload] = useState(0);
@@ -53,11 +64,13 @@ export default function ProviderProfile() {
   const loadError = providerState.id === id ? providerState.error : null;
   const servicePage = servicePageState.id === id ? servicePageState.page : 1;
 
-  useEffect(() => {
-    if (authLoading || !signInOpen || user?.role !== "CUSTOMER") return;
-    setSignInOpen(false);
-    navigate("/dashboard/customer", { replace: true });
-  }, [authLoading, signInOpen, user?.role, navigate]);
+  const availabilityKey = JSON.stringify([provider?.id, bookingService?.id, bookingDate, bookingStaff, user?.id, availabilityReload]);
+  const availabilityLoading = Boolean(bookingService) && resolvedAvailabilityKey !== availabilityKey;
+  const slotIsAvailable = !availabilityLoading && !availabilityError && Boolean(
+    bookingTime &&
+    bookingAvailability?.slots.some(slot => slot.startsAt === bookingTime && slot.status === "AVAILABLE"),
+  );
+
 
   useEffect(() => {
     if (!id) return;
@@ -71,63 +84,89 @@ export default function ProviderProfile() {
     return () => { active = false; };
   }, [id]);
 
-  // Keep the customer's in-progress selection while they sign in or verify a new account.
+  // Only restore a persisted selection into a customer's booking flow.
+  // This effect intentionally hydrates component state from external browser storage.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!provider || typeof window === "undefined") return;
-    try {
-      const draft = JSON.parse(window.localStorage.getItem(BOOKING_DRAFT_KEY) ?? "null") as
-        | { providerId?: string; serviceId?: string; date?: string; startsAt?: string; staffId?: string }
-        | null;
-      if (!draft || draft.providerId !== provider.id || !draft.serviceId) return;
-      const service = provider.services.find((item) => item.id === draft.serviceId);
-      if (!service) return;
-      setBookingService(service);
-      if (draft.date) setBookingDate(draft.date);
-      if (draft.startsAt) setBookingTime(draft.startsAt);
-      if (draft.staffId) setBookingStaff(draft.staffId);
-    } catch {
-      window.localStorage.removeItem(BOOKING_DRAFT_KEY);
+    if (!provider || authLoading || user?.role !== "CUSTOMER") return;
+    const key = `${provider.id}:${user.id}`;
+    if (restoredFor.current === key) return;
+    restoredFor.current = key;
+    const draft = readBookingDraft();
+    if (!draft || draft.providerId !== provider.id || !draftBelongsToCustomer(draft, user.id)) return;
+    const service = provider.services.find(item => item.id === draft.serviceId && item.bookable !== false);
+    if (!service) {
+      setBookingNotice("Your previous service is no longer bookable. Please choose another service below.");
+      return;
     }
-  }, [provider?.id]);
+    const expired = isBookingDraftExpired(draft);
+    const datePassed = draft.date < localDateString(new Date());
+    const timePassed = Boolean(draft.startsAt && Date.parse(draft.startsAt) <= Date.now());
+    setBookingService(service);
+    setBookingDate(datePassed ? localDateString(new Date()) : draft.date);
+    setBookingStaff(provider.kind === "BUSINESS" ? draft.staffId ?? "" : "");
+    setBookingTime(expired || datePassed || timePassed ? null : draft.startsAt ?? null);
+    if (expired || datePassed || timePassed) setBookingNotice("Your saved time has expired or passed. Please select a current available time.");
+  }, [provider, authLoading, user]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
-    if (!bookingService || !provider || typeof window === "undefined") return;
-    window.localStorage.setItem(BOOKING_DRAFT_KEY, JSON.stringify({
-      providerId: provider.id,
-      serviceId: bookingService.id,
-      date: bookingDate,
+    if (!bookingService || !provider || authLoading || (user && user.role !== "CUSTOMER")) return;
+    const saved = saveBookingDraft({
+      version: 1, providerId: provider.id, serviceId: bookingService.id,
+      date: bookingDate, savedAt: Date.now(),
       ...(bookingTime ? { startsAt: bookingTime } : {}),
-      ...(bookingStaff ? { staffId: bookingStaff } : {}),
-    }));
-  }, [provider?.id, bookingService?.id, bookingDate, bookingTime, bookingStaff]);
+      ...(provider.kind === "BUSINESS" && bookingStaff ? { staffId: bookingStaff } : {}),
+      ...(user ? { customerId: user.id } : {}),
+    });
+    if (!saved) toast.error("Browser storage is unavailable. Your selection cannot be preserved through sign-in.");
+  }, [provider, bookingService, bookingDate, bookingTime, bookingStaff, authLoading, user]);
+
+  useEffect(() => { selectedTime.current = bookingTime; }, [bookingTime]);
 
   useEffect(() => {
     if (!provider || !bookingService || !bookingDate) return;
     let active = true;
-    setAvailabilityLoading(true);
-    setAvailabilityError(null);
-    setBookingAvailability(null);
+    const input = { providerId: provider.id, serviceId: bookingService.id, date: bookingDate };
+    void (async () => {
+      try {
+        let availability: ProviderAvailabilityResponse;
+        if (provider.kind === "BUSINESS" && bookingStaff) {
+          // Fetch eligibility first: an invalid saved staff ID otherwise causes a 400
+          // before the server returns the replacement staff options.
+          const eligible = await fetchProviderAvailability(input);
+          if (!active) return;
+          if (!eligible.staff.some(member => member.id === bookingStaff)) {
+            setBookingAvailability(eligible);
+            setBookingStaff(""); setBookingTime(null);
+            setBookingNotice("Your selected staff member is no longer assigned to this service. Please choose another.");
+            setAvailabilityError(null);
+            setResolvedAvailabilityKey(availabilityKey);
+            return;
+          }
+          availability = await fetchProviderAvailability({ ...input, staffId: bookingStaff });
+        } else {
+          availability = await fetchProviderAvailability(input);
+        }
+        if (!active) return;
+        setBookingAvailability(availability);
+        setAvailabilityError(null);
+        setResolvedAvailabilityKey(availabilityKey);
+        const { invalidTime } = validateBookingSelection({ business: provider.kind === "BUSINESS", staffId: bookingStaff, startsAt: selectedTime.current, availability });
+        if (invalidTime) {
+          setBookingTime(null);
+          setBookingNotice("Your selected time is no longer available. Please choose a replacement.");
+        }
+      } catch (error) {
+        if (!active) return;
+        setBookingAvailability(null);
+        setAvailabilityError(error instanceof Error ? error.message : "Unable to load availability.");
+        setResolvedAvailabilityKey(availabilityKey);
+      }
+    })();
+    return () => { active = false; };
+  }, [provider, bookingService, bookingDate, bookingStaff, availabilityKey]);
 
-    void fetchProviderAvailability({
-      providerId: provider.id,
-      serviceId: bookingService.id,
-      date: bookingDate,
-      ...(provider.kind === "BUSINESS" && bookingStaff ? { staffId: bookingStaff } : {}),
-    })
-      .then((availability) => {
-        if (active) setBookingAvailability(availability);
-      })
-      .catch((error: unknown) => {
-        if (active) setAvailabilityError(error instanceof Error ? error.message : "Unable to load availability.");
-      })
-      .finally(() => {
-        if (active) setAvailabilityLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [provider?.id, provider?.kind, bookingService?.id, bookingDate, bookingStaff, availabilityReload]);
 
   if (isLoading) {
     return <section className="min-h-[60vh] bg-[#F8FAFC] py-14"><div className="mx-auto max-w-7xl animate-pulse px-6 lg:px-8" role="status" aria-label="Loading provider"><div className="h-5 w-32 rounded bg-slate-200" /><div className="mt-8 h-28 rounded-2xl bg-white" /><div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((item) => <div key={item} className="h-64 rounded-2xl border border-slate-200 bg-white p-6"><div className="h-5 w-1/2 rounded bg-slate-200" /><div className="mt-5 h-12 rounded bg-slate-100" /></div>)}</div></div></section>;
@@ -168,6 +207,9 @@ export default function ProviderProfile() {
     servicePage * SERVICES_PER_PAGE
   );
   const openBookingPreview = (service: ProviderService) => {
+    if (user && user.role !== "CUSTOMER") { toast.error("Bookings require a customer account. Please use a customer account to continue."); return; }
+    if (authLoading) return;
+    setBookingNotice("");
     setBookingService(service);
     setBookingDate(localDateString(new Date()));
     setBookingTime(null);
@@ -176,36 +218,54 @@ export default function ProviderProfile() {
     setAvailabilityError(null);
   };
 
-  const submitBooking = async () => {
-    if (!bookingService || !bookingTime) return;
+  const closeBooking = () => {
+    if (submitting.current) return;
+    if (!clearBookingDraft()) toast.error("Your browser could not clear the saved selection.");
+    setBookingService(null); setBookingTime(null); setBookingStaff("");
+    setSignInOpen(false); setBookingNotice("");
+  };
 
+  const submitBooking = async () => {
+    if (submitting.current || !bookingService || !bookingTime || !slotIsAvailable) return;
+    submitting.current = true;
     setBookingSubmitting(true);
     try {
       const response = await createAppointment({
-        providerId: provider.id,
-        serviceId: bookingService.id,
-        startsAt: bookingTime,
+        providerId: provider.id, serviceId: bookingService.id, startsAt: bookingTime,
         ...(provider.kind === "BUSINESS" ? { staffId: bookingStaff } : {}),
       });
-      window.localStorage.removeItem(BOOKING_DRAFT_KEY);
+      if (!clearBookingDraft()) toast.error("Appointment saved, but your browser could not clear the old selection.");
       toast.success("Appointment confirmed.");
-      setSignInOpen(false);
-      setSignInError(null);
-      setBookingService(null);
-      setBookingTime(null);
-      setAvailabilityReload((current) => current + 1);
+      setSignInOpen(false); setSignInError(null); setBookingService(null); setBookingTime(null);
       navigate(`/dashboard/customer/appointments/${encodeURIComponent(response.appointment.id)}?confirmed=1`, { replace: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to create appointment.";
+      setBookingNotice(message);
       toast.error(message);
-      setBookingTime(null);
-      setAvailabilityReload((current) => current + 1);
+      if (error instanceof ApiError && error.status === 401) {
+        navigate(`/login?returnTo=${encodeURIComponent(bookingDraftPath({ providerId: provider.id }))}`);
+      } else if (error instanceof ApiError && [400, 404, 409, 422].includes(error.status)) {
+        setBookingTime(null);
+        setAvailabilityReload(current => current + 1);
+      } else {
+        setBookingNotice("The booking result is uncertain. Check My appointments before submitting again. Your selection has been retained.");
+        setAvailabilityReload(current => current + 1);
+      }
     } finally {
+      submitting.current = false;
       setBookingSubmitting(false);
     }
   };
 
   const handleBookingSubmit = async () => {
+    if (authLoading || submitting.current || !slotIsAvailable) return;
+    if (bookingTime && Date.parse(bookingTime) <= Date.now()) {
+      setBookingTime(null); setAvailabilityReload(current => current + 1);
+      setBookingNotice("That time has passed. Please select a current available time.");
+      return;
+    }
+    const saved = saveBookingDraft({ version: 1, providerId: provider.id, serviceId: bookingService!.id, date: bookingDate, startsAt: bookingTime!, savedAt: Date.now(), ...(bookingStaff ? { staffId: bookingStaff } : {}), ...(user?.role === "CUSTOMER" ? { customerId: user.id } : {}) });
+    if (!saved) { toast.error("Enable browser storage before continuing so your selection can be preserved."); return; }
     if (!bookingDate || bookingDate < localDateString(new Date())) {
       toast.error("Choose today or a future date.");
       return;
@@ -241,13 +301,13 @@ export default function ProviderProfile() {
       setSignInOpen(false);
       setSignInError(null);
       toast.success("Signed in successfully.");
-      navigate("/dashboard/customer", { replace: true });
+      setAvailabilityReload(current => current + 1);
     } catch (error) {
       const unverifiedEmail = getVerificationEmail(error);
       if (unverifiedEmail) {
         const emailSent = (error as { data?: { emailSent?: boolean } } | null)?.data?.emailSent !== false;
         setSignInOpen(false);
-        navigate("/verify-email", { state: { email: unverifiedEmail, emailSent } });
+        navigate("/verify-email", { state: { email: unverifiedEmail, emailSent, returnTo: bookingDraftPath({ providerId: provider.id }) } });
         return;
       }
       setSignInError(error instanceof Error ? error.message : "Unable to sign in. Please try again.");
@@ -258,6 +318,7 @@ export default function ProviderProfile() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
+      {bookingNotice && !bookingService && <p role="status" className="mx-auto max-w-7xl rounded-lg bg-amber-50 p-4">{bookingNotice}</p>}
       {/* Provider heading */}
       <section className="bg-white">
         <div className="mx-auto max-w-7xl px-6 py-14 lg:px-8">
@@ -358,7 +419,7 @@ export default function ProviderProfile() {
             {paginatedServices.map((service) => (
               <article
                 key={service.id}
-                className={`flex h-full flex-col rounded-2xl border p-6 transition duration-200 ${!isOpen || service.bookable === false ? "border-slate-200 bg-slate-100 opacity-70" : "border-slate-200 bg-white hover:-translate-y-1 hover:border-[#0EA5E9]/40 hover:shadow-xl hover:shadow-slate-200/60"}`}
+                className={`flex h-full flex-col rounded-2xl border p-6 transition duration-200 ${service.bookable === false ? "border-slate-200 bg-slate-100 opacity-70" : "border-slate-200 bg-white hover:-translate-y-1 hover:border-[#0EA5E9]/40 hover:shadow-xl hover:shadow-slate-200/60"}`}
               >
                 <div className="flex-1">
                   <h3 className="text-xl font-semibold text-[#0F172A]">
@@ -392,18 +453,19 @@ export default function ProviderProfile() {
                   </div>
                 </div>
 
-                {!isOpen || service.bookable === false ? (
+                {service.bookable === false ? (
                   <button
                     type="button"
                     disabled
                     className="mt-6 w-full cursor-not-allowed rounded-xl border border-slate-300 bg-slate-200 px-5 py-3 text-sm font-semibold text-slate-500"
-                    aria-label={!isOpen ? "Provider is currently closed" : service.assigned === false ? "No staff assigned to this service" : "This service is unavailable for booking"}
+                    aria-label={service.assigned === false ? "No staff assigned to this service" : "This service is unavailable for booking"}
                   >
-                    {!isOpen ? "Provider is closed" : service.assigned === false ? "No staff assigned" : "Currently unavailable"}
+                    {service.assigned === false ? "No staff assigned" : "Currently unavailable"}
                   </button>
                 ) : (
                   <button
                     type="button"
+                    disabled={authLoading}
                     onClick={() => openBookingPreview(service)}
                     className="mt-6 flex w-full items-center justify-center rounded-xl bg-[#0EA5E9] px-5 py-3 text-sm font-semibold text-white shadow-[0_0_0_0_rgba(14,165,233,0)] transition-all duration-200 hover:bg-[#38BDF8] hover:shadow-[0_0_20px_-4px_rgba(14,165,233,0.5)]"
                   >
@@ -457,7 +519,7 @@ export default function ProviderProfile() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-950/55 p-4 backdrop-blur-sm"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setBookingService(null);
+            if (event.target === event.currentTarget) closeBooking();
           }}
         >
           <section
@@ -475,7 +537,8 @@ export default function ProviderProfile() {
               </div>
               <button
                 type="button"
-                onClick={() => { window.localStorage.removeItem(BOOKING_DRAFT_KEY); setBookingService(null); }}
+                onClick={closeBooking}
+                disabled={bookingSubmitting}
                 aria-label="Close booking form"
                 className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
               >
@@ -486,11 +549,13 @@ export default function ProviderProfile() {
             </header>
 
             <div className="space-y-6 p-5 sm:p-7">
+              {bookingNotice && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm">{bookingNotice} <Link className="underline" to="/dashboard/customer/appointments">My appointments</Link></p>}
               <div>
                 <label htmlFor="booking-date" className="mb-1.5 block text-sm font-semibold text-slate-800">1. Choose a date</label>
                 <input
                   id="booking-date"
                   type="date"
+                  disabled={bookingSubmitting}
                   min={localDateString(new Date())}
                   value={bookingDate}
                   onChange={(event) => {
@@ -527,7 +592,7 @@ export default function ProviderProfile() {
                       setBookingStaff(event.target.value);
                       setBookingTime(null);
                     }}
-                    disabled={availabilityLoading || !bookingAvailability || bookingAvailability.staff.length === 0}
+                    disabled={bookingSubmitting || availabilityLoading || !bookingAvailability || bookingAvailability.staff.length === 0}
                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100 disabled:bg-slate-100 disabled:text-slate-500"
                   >
                     <option value="">{availabilityLoading ? "Loading assigned staff..." : bookingAvailability?.staff.length ? "Select an assigned staff member" : "No verified staff assigned to this service"}</option>
@@ -545,7 +610,7 @@ export default function ProviderProfile() {
                 {availabilityLoading ? (
                   <p className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600" role="status">Loading live availability...</p>
                 ) : availabilityError ? (
-                  <p className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">{availabilityError}</p>
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert"><p>{availabilityError}</p><button type="button" className="mt-2 underline" onClick={() => setAvailabilityReload(current => current + 1)}>Retry availability</button></div>
                 ) : provider.kind === "BUSINESS" && !bookingStaff ? (
                   <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">Select an assigned staff member to load their available times.</p>
                 ) : (bookingAvailability?.slots.length ?? 0) === 0 ? (
@@ -560,7 +625,7 @@ export default function ProviderProfile() {
                       <button
                         key={slot.startsAt}
                         type="button"
-                        disabled={!available}
+                        disabled={bookingSubmitting || !available}
                         aria-pressed={bookingTime === slot.startsAt}
                         onClick={() => setBookingTime(slot.startsAt)}
                         className={`rounded-lg border px-3 py-2.5 text-sm font-semibold transition ${
@@ -584,7 +649,8 @@ export default function ProviderProfile() {
             <footer className="flex flex-col-reverse gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-7">
               <button
                 type="button"
-                onClick={() => setBookingService(null)}
+                onClick={closeBooking}
+                disabled={bookingSubmitting}
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100"
               >
                 Cancel
@@ -592,7 +658,7 @@ export default function ProviderProfile() {
               <button
                 type="button"
                 onClick={() => void handleBookingSubmit()}
-                disabled={bookingTime === null || bookingSubmitting || (provider.kind === "BUSINESS" && !bookingStaff)}
+                disabled={authLoading || !slotIsAvailable || bookingSubmitting || (provider.kind === "BUSINESS" && !bookingStaff)}
                 className="rounded-lg bg-sky-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {bookingSubmitting ? "Booking..." : "Book appointment"}
@@ -686,7 +752,7 @@ export default function ProviderProfile() {
                 {signInSubmitting ? "Signing in..." : "Sign in"}
               </button>
               <p className="text-center text-sm text-slate-600">
-                New here? <Link to="/register/customer" onClick={() => setSignInOpen(false)} className="font-semibold text-sky-700 hover:underline">Create a customer account</Link>
+                New here? <Link to={`/register/customer?returnTo=${encodeURIComponent(bookingDraftPath({ providerId: provider.id }))}`} onClick={() => setSignInOpen(false)} className="font-semibold text-sky-700 hover:underline">Create a customer account</Link>
               </p>
             </form>
           </section>

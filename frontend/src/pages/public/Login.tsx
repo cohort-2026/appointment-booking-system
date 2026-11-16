@@ -3,16 +3,17 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../../hooks/useAuth";
 import { getVerificationEmail } from "../../services/auth";
-import { getDashboardPath } from "../../lib/dashboardPath";
+import { postLoginDestination, safeCustomerReturnPath } from "../../lib/bookingFlow";
+import { bookingDraftPath, readBookingDraft } from "../../lib/bookingDraft";
 
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, user, loading: authLoading } = useAuth();
   const requestedReturnTo = new URLSearchParams(location.search).get("returnTo");
-  const safeReturnTo = requestedReturnTo?.startsWith("/") && !requestedReturnTo.startsWith("//")
-    ? requestedReturnTo
-    : null;
+  const safeReturnTo = safeCustomerReturnPath(requestedReturnTo);
+  const draft = readBookingDraft();
+  const authReturnTo = safeReturnTo ?? (draft ? bookingDraftPath(draft) : null);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,30 +30,9 @@ export default function Login() {
 
       toast.success("Signed in successfully!");
 
-      switch (user.role) {
-        case "CUSTOMER":
-          navigate(safeReturnTo ?? "/dashboard/customer", { replace: true });
-          break;
-
-        case "SOLE_PROVIDER":
-          navigate("/dashboard/provider", { replace: true });
-          break;
-
-        case "BUSINESS_OWNER":
-          navigate("/dashboard/business", { replace: true });
-          break;
-
-        case "BUSINESS_STAFF":
-          navigate("/dashboard/staff", { replace: true });
-          break;
-
-        case "ADMIN":
-          navigate("/dashboard/admin", { replace: true });
-          break;
-
-        default:
-          toast.error("Your account has an unsupported role.");
-      }
+      const destination = postLoginDestination(user, safeReturnTo);
+      if (destination) navigate(destination, { replace: true });
+      else toast.error("Your account has an unsupported role.");
     } catch (error) {
       const unverifiedEmail = getVerificationEmail(error);
 
@@ -66,7 +46,7 @@ export default function Login() {
             : "We couldn't send your code. You can retry from the verification page.",
         );
         navigate("/verify-email", {
-          state: { email: unverifiedEmail, emailSent, ...(safeReturnTo ? { returnTo: safeReturnTo } : {}) },
+          state: { email: unverifiedEmail, emailSent, ...(authReturnTo ? { returnTo: authReturnTo } : {}) },
         });
         return;
       }
@@ -81,7 +61,7 @@ export default function Login() {
   }
 
   if (authLoading) return null;
-  const activeSessionDestination = user ? getDashboardPath(user.role) : null;
+  const activeSessionDestination = user ? postLoginDestination(user, safeReturnTo) : null;
   if (activeSessionDestination) {
     return <Navigate to={activeSessionDestination} replace />;
   }
@@ -250,7 +230,7 @@ export default function Login() {
                 <p className="text-sm text-slate-500">
                   Don't have an account?{" "}
                   <Link
-                    to={safeReturnTo ? `/register/customer?returnTo=${encodeURIComponent(safeReturnTo)}` : "/register"}
+                    to={authReturnTo ? `/register/customer?returnTo=${encodeURIComponent(authReturnTo)}` : "/register"}
                     className="font-semibold text-[#0EA5E9] hover:text-sky-700"
                   >
                     Get started

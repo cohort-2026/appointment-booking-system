@@ -1,3 +1,4 @@
+import { safeCustomerReturnPath } from "../../../lib/bookingFlow";
 import { useState, type FormEvent } from "react";
 import toast from "react-hot-toast";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -43,9 +44,7 @@ export default function CustomerRegister() {
   const navigate = useNavigate();
   const location = useLocation();
   const requestedReturnTo = new URLSearchParams(location.search).get("returnTo");
-  const safeReturnTo = requestedReturnTo?.startsWith("/") && !requestedReturnTo.startsWith("//")
-    ? requestedReturnTo
-    : null;
+  const safeReturnTo = safeCustomerReturnPath(requestedReturnTo);
 
   const update = (field: string, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [field]: value }));

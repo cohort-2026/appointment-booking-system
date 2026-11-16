@@ -1,13 +1,12 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../../hooks/useAuth";
 import { resendEmailOtp } from "../../services/auth";
-import { getDashboardPath } from "../../lib/dashboardPath";
 import { createAppointment } from "../../services/bookings";
+import { finishVerifiedBooking, safeCustomerReturnPath } from "../../lib/bookingFlow";
 
 const RESEND_COOLDOWN_SECONDS = 60;
-const PENDING_BOOKING_KEY = "appointment-booking-draft";
 
 export default function VerifyEmail() {
   const navigate = useNavigate();
@@ -19,6 +18,8 @@ export default function VerifyEmail() {
   const email = verificationState?.email ?? "";
   const emailSent = verificationState?.emailSent !== false;
 
+  const submitting = useRef(false);
+  const safeReturnTo = safeCustomerReturnPath(verificationState?.returnTo);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -38,80 +39,28 @@ export default function VerifyEmail() {
   }, [secondsLeft]);
 
   if (!email) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={safeReturnTo ? `/login?returnTo=${encodeURIComponent(safeReturnTo)}` : "/login"} replace />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
     setLoading(true);
 
     try {
       const user = await verifyEmail(email, code);
-      let appointmentBooked = false;
-      let bookedAppointmentId: string | null = null;
-      let bookingError: string | null = null;
-
-      if (user.role === "CUSTOMER") {
-        const savedDraft = window.localStorage.getItem(PENDING_BOOKING_KEY);
-        if (savedDraft) {
-          window.localStorage.removeItem(PENDING_BOOKING_KEY);
-          try {
-            const draft = JSON.parse(savedDraft) as {
-              providerId?: unknown;
-              serviceId?: unknown;
-              startsAt?: unknown;
-              staffId?: unknown;
-            };
-            if (
-              typeof draft.providerId !== "string" ||
-              typeof draft.serviceId !== "string" ||
-              typeof draft.startsAt !== "string" ||
-              (draft.staffId !== undefined && typeof draft.staffId !== "string")
-            ) {
-              throw new Error("The saved booking details are incomplete.");
-            }
-
-            const bookingResult = await createAppointment({
-              providerId: draft.providerId,
-              serviceId: draft.serviceId,
-              startsAt: draft.startsAt,
-              ...(typeof draft.staffId === "string" ? { staffId: draft.staffId } : {}),
-            });
-            appointmentBooked = true;
-            bookedAppointmentId = bookingResult.appointment.id;
-          } catch (error) {
-            bookingError = error instanceof Error
-              ? error.message
-              : "The appointment could not be booked. Please try again from your dashboard.";
-          }
-        }
-      }
-
-      const path = getDashboardPath(user.role);
-
-      if (path) {
-        navigate(
-          bookedAppointmentId
-            ? `${path}?bookedAppointment=${encodeURIComponent(bookedAppointmentId)}`
-            : path,
-          { replace: true },
-        );
-        if (appointmentBooked) {
-          toast.success("Email verified and your appointment is booked.");
-        } else if (bookingError) {
-          toast.error(`Email verified, but the appointment could not be booked: ${bookingError}`);
-        } else {
-          toast.success("Email verified!");
-        }
-      } else {
-        toast.error("Your account has an unsupported role.");
-      }
+      const outcome = await finishVerifiedBooking(user, safeReturnTo, createAppointment);
+      navigate(outcome.destination, { replace: true, state: { bookingNotice: outcome.message } });
+      if (outcome.error) toast.error(outcome.message);
+      else toast.success(outcome.message);
     } catch (error) {
       console.error("Email verification failed:", error);
       toast.error(
         error instanceof Error ? error.message : "Unable to connect to the server.",
       );
     } finally {
+      submitting.current = false;
       setLoading(false);
     }
   }
@@ -211,7 +160,7 @@ export default function VerifyEmail() {
               </p>
               <p className="mt-3 text-sm text-slate-500">
                 <Link
-                  to="/login"
+                  to={safeReturnTo ? `/login?returnTo=${encodeURIComponent(safeReturnTo)}` : "/login"}
                   className="font-semibold text-[#0F172A] underline decoration-sky-300 underline-offset-4"
                 >
                   Back to sign in
