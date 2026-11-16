@@ -3,7 +3,7 @@ import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
 import { BookingError, resolveBookingAvailability } from "../services/booking.service.js";
 import { timeRangesOverlap } from "../services/availability.service.js";
-import { sendAppointmentConfirmationEmail } from "../services/email.service.js";
+import { notifyAppointmentCreated } from "../services/appointment-notification.service.js";
 
 export const getCustomerDashboard = async (
   req: AuthenticatedRequest,
@@ -235,6 +235,7 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
         include: {
           service: { select: { name: true, durationMinutes: true } },
           customer: { select: { firstName: true, email: true } },
+          staff: { select: { user: { select: { firstName: true, lastName: true } } } },
           soleProvider: { select: { displayName: true } },
           business: { select: { name: true } },
         },
@@ -245,27 +246,7 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
       timeout: 20_000,
     });
 
-    const frontendOrigin = process.env.FRONTEND_ORIGIN ?? "http://localhost:5173";
-    const appointmentUrl = new URL(
-      `/dashboard/customer/appointments/${encodeURIComponent(appointment.id)}?confirmed=1`,
-      frontendOrigin,
-    ).toString();
-
-    try {
-      await sendAppointmentConfirmationEmail({
-        to: appointment.customer.email,
-        firstName: appointment.customer.firstName,
-        serviceName: appointment.service.name,
-        providerName:
-          appointment.soleProvider?.displayName ?? appointment.business?.name ?? "Provider",
-        startsAt: appointment.scheduledStart,
-        durationMinutes: appointment.service.durationMinutes,
-        appointmentUrl,
-      });
-    } catch (emailError) {
-      // The appointment is committed already; email delivery must not undo or hide the booking.
-      console.error("Appointment confirmation email failed:", emailError);
-    }
+    await notifyAppointmentCreated(appointment);
 
     return res.status(201).json({
       success: true,

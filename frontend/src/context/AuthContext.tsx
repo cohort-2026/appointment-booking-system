@@ -1,3 +1,4 @@
+import { clearBookingDraft } from "../lib/bookingDraft";
 import {
   createContext,
   useCallback,
@@ -92,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Logout failed:", error);
     } finally {
+      if (!clearBookingDraft()) console.warn("Could not clear the saved booking on this browser.");
       setUser(null);
       setLoading(false);
       navigate("/login", { replace: true });
