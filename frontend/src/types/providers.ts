@@ -1,3 +1,5 @@
+import { apiFetch } from "../services/api";
+
 export type ProviderService = {
   id: string;
   name: string;
@@ -20,3 +22,15 @@ export type Provider = {
   status: "Open" | "Closed";
   services: ProviderService[];
 };
+
+// providers.ts - Example of adding a try/catch block to handle the error
+export async function fetchProviders() {
+  try {
+    const data = await apiFetch('/providers');
+    return data;
+  } catch (error) {
+    console.error("Failed to load home providers:", error);
+    // Return an empty list or trigger a UI notification to the user
+    return []; 
+  }
+}
