@@ -19,4 +19,19 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  // Generated component APIs intentionally expose these named helpers.
+  ...[
+    ['button', 'buttonVariants'],
+    ['badge', 'badgeVariants'],
+    ['tabs', 'tabsListVariants'],
+    ['sidebar', 'useSidebar'],
+  ].map(([file, exportName]) => ({
+    files: [`src/components/ui/${file}.tsx`],
+    rules: {
+      'react-refresh/only-export-components': ['error', {
+        allowConstantExport: true,
+        allowExportNames: [exportName],
+      }],
+    },
+  })),
 ])
