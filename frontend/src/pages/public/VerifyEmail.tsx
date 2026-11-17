@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../../hooks/useAuth";
 import { resendEmailOtp } from "../../services/auth";
-import { getDashboardPath } from "../../lib/dashboardPath";
+import { createAppointment } from "../../services/bookings";
+import { finishVerifiedBooking, safeCustomerReturnPath } from "../../lib/bookingFlow";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
@@ -12,11 +13,13 @@ export default function VerifyEmail() {
   const location = useLocation();
   const { verifyEmail } = useAuth();
   const verificationState = location.state as
-    | { email?: string; emailSent?: boolean }
+    | { email?: string; emailSent?: boolean; returnTo?: string }
     | null;
   const email = verificationState?.email ?? "";
   const emailSent = verificationState?.emailSent !== false;
 
+  const submitting = useRef(false);
+  const safeReturnTo = safeCustomerReturnPath(verificationState?.returnTo);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -36,30 +39,28 @@ export default function VerifyEmail() {
   }, [secondsLeft]);
 
   if (!email) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={safeReturnTo ? `/login?returnTo=${encodeURIComponent(safeReturnTo)}` : "/login"} replace />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting.current) return;
+    submitting.current = true;
     setLoading(true);
 
     try {
       const user = await verifyEmail(email, code);
-      const path = getDashboardPath(user.role);
-
-      toast.success("Email verified!");
-
-      if (path) {
-        navigate(path, { replace: true });
-      } else {
-        toast.error("Your account has an unsupported role.");
-      }
+      const outcome = await finishVerifiedBooking(user, safeReturnTo, createAppointment);
+      navigate(outcome.destination, { replace: true, state: { bookingNotice: outcome.message } });
+      if (outcome.error) toast.error(outcome.message);
+      else toast.success(outcome.message);
     } catch (error) {
       console.error("Email verification failed:", error);
       toast.error(
         error instanceof Error ? error.message : "Unable to connect to the server.",
       );
     } finally {
+      submitting.current = false;
       setLoading(false);
     }
   }
@@ -159,7 +160,7 @@ export default function VerifyEmail() {
               </p>
               <p className="mt-3 text-sm text-slate-500">
                 <Link
-                  to="/login"
+                  to={safeReturnTo ? `/login?returnTo=${encodeURIComponent(safeReturnTo)}` : "/login"}
                   className="font-semibold text-[#0F172A] underline decoration-sky-300 underline-offset-4"
                 >
                   Back to sign in

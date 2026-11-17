@@ -78,6 +78,46 @@ export async function sendPasswordResetEmail(
   );
 }
 
+export type AppointmentConfirmationInput = {
+  to: string;
+  firstName: string;
+  appointmentId: string;
+  status: string;
+  serviceName: string;
+  providerName: string;
+  staffName: string | null;
+  startsAt: Date;
+  durationMinutes: number;
+  appointmentUrl: string;
+};
+
+export function buildAppointmentConfirmationEmail(input: AppointmentConfirmationInput) {
+  const date = new Intl.DateTimeFormat("en-ZA", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Africa/Johannesburg",
+  }).format(input.startsAt);
+  const status = input.status.replaceAll("_", " ");
+  const details: Array<[string, string]> = [
+    ["Reference", input.appointmentId],
+    ["Status", status],
+    ["Service", input.serviceName],
+    ["Provider", input.providerName],
+    ...(input.staffName ? [["Assigned staff", input.staffName] as [string, string]] : []),
+    ["Date and time", `${date} (SAST)`],
+    ["Duration", `${input.durationMinutes} minutes`],
+  ];
+  return {
+    subject: `Appointment confirmed: ${input.serviceName}`,
+    text: `Hi ${input.firstName}, your appointment has been saved.\n${details.map(([label, value]) => `${label}: ${value}`).join("\n")}\nView your saved appointment: ${input.appointmentUrl}`,
+    html: `<p>Hi ${escapeHtml(input.firstName)},</p><p>Your appointment has been saved.</p><ul>${details.map(([label, value]) => `<li><strong>${label}:</strong> ${escapeHtml(value)}</li>`).join("")}</ul><p><a href="${escapeHtml(input.appointmentUrl)}">View your saved appointment</a></p>`,
+  };
+}
+
+export async function sendAppointmentConfirmationEmail(input: AppointmentConfirmationInput): Promise<void> {
+  const content = buildAppointmentConfirmationEmail(input);
+  await sendEmail(input.to, content.subject, content.text, content.html);
+}
+
 export async function sendStaffInvitationEmail(
   to: string,
   firstName: string,

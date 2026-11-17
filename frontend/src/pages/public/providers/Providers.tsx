@@ -274,9 +274,9 @@ function ProviderCard({ provider }: { provider: Provider }) {
             {provider.services.slice(0, 2).map((service) => (
               <span
                 key={service.id}
-                title={!isOpen || service.bookable === false ? "Not currently available to book" : undefined}
+                title={service.bookable === false ? "Not currently available to book" : undefined}
                 className={`rounded-lg px-2.5 py-1 text-xs font-medium ${
-                  isOpen && service.bookable !== false
+                  service.bookable !== false
                     ? "bg-slate-100 text-slate-600"
                     : "bg-slate-50 text-slate-400"
                 }`}

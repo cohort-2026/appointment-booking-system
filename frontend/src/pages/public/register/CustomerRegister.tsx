@@ -1,6 +1,7 @@
+import { safeCustomerReturnPath } from "../../../lib/bookingFlow";
 import { useState, type FormEvent } from "react";
 import toast from "react-hot-toast";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 function EyeIcon({ open }: { open: boolean }) {
   return open ? (
@@ -41,6 +42,9 @@ export default function CustomerRegister() {
   const passwordsMatch = form.confirmPassword.length > 0 && form.password === form.confirmPassword;
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const requestedReturnTo = new URLSearchParams(location.search).get("returnTo");
+  const safeReturnTo = safeCustomerReturnPath(requestedReturnTo);
 
   const update = (field: string, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -91,6 +95,7 @@ export default function CustomerRegister() {
           email:
             data.email ?? data.user?.email ?? form.email.trim().toLowerCase(),
           emailSent: data.emailSent !== false,
+          ...(safeReturnTo ? { returnTo: safeReturnTo } : {}),
         },
       });
     } catch (error) {

@@ -3,6 +3,7 @@ import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
 import { BookingError, resolveBookingAvailability } from "../services/booking.service.js";
 import { timeRangesOverlap } from "../services/availability.service.js";
+import { notifyAppointmentCreated } from "../services/appointment-notification.service.js";
 
 export const getCustomerDashboard = async (
   req: AuthenticatedRequest,
@@ -37,9 +38,15 @@ export const getCustomerDashboard = async (
         orderBy: { scheduledStart: "asc" },
         take: 5,
         include: {
-          service: { select: { name: true } },
+          service: { select: { name: true, durationMinutes: true, expectedPrice: true } },
           soleProvider: { select: { displayName: true } },
           business: { select: { name: true } },
+          staff: {
+            select: {
+              title: true,
+              user: { select: { firstName: true, lastName: true } },
+            },
+          },
         },
       }),
     ]);
@@ -70,6 +77,12 @@ export const getCustomerDashboard = async (
           appointment.soleProvider?.displayName ??
           appointment.business?.name ??
           "Provider",
+        staffName: appointment.staff
+          ? `${appointment.staff.user.firstName}${appointment.staff.user.lastName ? ` ${appointment.staff.user.lastName}` : ""}`
+          : null,
+        staffTitle: appointment.staff?.title ?? null,
+        durationMinutes: appointment.service.durationMinutes,
+        price: appointment.service.expectedPrice?.toString() ?? null,
         status: appointment.status,
       })),
     });
@@ -99,9 +112,10 @@ export const getCustomerAppointments = async (req: AuthenticatedRequest, res: Re
         },
         orderBy: { scheduledStart: "asc" },
         include: {
-          service: { select: { name: true } },
+          service: { select: { name: true, durationMinutes: true, expectedPrice: true } },
           soleProvider: { select: { displayName: true } },
           business: { select: { name: true } },
+          staff: { select: { title: true, user: { select: { firstName: true, lastName: true } } } },
         },
       }),
       prisma.appointment.findMany({
@@ -112,9 +126,10 @@ export const getCustomerAppointments = async (req: AuthenticatedRequest, res: Re
         orderBy: { scheduledStart: "desc" },
         take: 10,
         include: {
-          service: { select: { name: true } },
+          service: { select: { name: true, durationMinutes: true, expectedPrice: true } },
           soleProvider: { select: { displayName: true } },
           business: { select: { name: true } },
+          staff: { select: { title: true, user: { select: { firstName: true, lastName: true } } } },
         },
       }),
     ]);
@@ -124,6 +139,12 @@ export const getCustomerAppointments = async (req: AuthenticatedRequest, res: Re
       time: a.scheduledStart,
       service: a.service.name,
       providerName: a.soleProvider?.displayName ?? a.business?.name ?? "Provider",
+      staffName: a.staff
+        ? `${a.staff.user.firstName}${a.staff.user.lastName ? ` ${a.staff.user.lastName}` : ""}`
+        : null,
+      staffTitle: a.staff?.title ?? null,
+      durationMinutes: a.service.durationMinutes,
+      price: a.service.expectedPrice?.toString() ?? null,
       status: a.status,
     });
 
@@ -211,13 +232,21 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
             ? { soleProviderId: id }
             : { businessId: id, staffId: staffId! }),
         },
-        include: { service: { select: { name: true, durationMinutes: true } } },
+        include: {
+          service: { select: { name: true, durationMinutes: true } },
+          customer: { select: { firstName: true, email: true } },
+          staff: { select: { user: { select: { firstName: true, lastName: true } } } },
+          soleProvider: { select: { displayName: true } },
+          business: { select: { name: true } },
+        },
       });
     }, {
       isolationLevel: "Serializable",
       maxWait: 15_000,
       timeout: 20_000,
     });
+
+    await notifyAppointmentCreated(appointment);
 
     return res.status(201).json({
       success: true,
