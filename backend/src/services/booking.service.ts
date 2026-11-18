@@ -1,3 +1,4 @@
+import { bookedDurationMinutes } from "../lib/booking-snapshot.js";
 import prisma from "../lib/prisma.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import {
@@ -84,7 +85,7 @@ export async function resolveBookingAvailability(
       availability: provider.availability,
       bookedRanges: appointments.map((appointment) => ({
         start: appointment.scheduledStart,
-        durationMinutes: appointment.service.durationMinutes,
+        durationMinutes: bookedDurationMinutes(appointment),
       })),
     });
 
@@ -158,7 +159,7 @@ export async function resolveBookingAvailability(
     availability,
     bookedRanges: appointments.map((appointment) => ({
       start: appointment.scheduledStart,
-      durationMinutes: appointment.service.durationMinutes,
+      durationMinutes: bookedDurationMinutes(appointment),
     })),
   });
 

@@ -1,3 +1,4 @@
+import { createBookingSnapshot, bookedDurationMinutes, bookedPrice } from "../lib/booking-snapshot.js";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
@@ -81,8 +82,8 @@ export const getCustomerDashboard = async (
           ? `${appointment.staff.user.firstName}${appointment.staff.user.lastName ? ` ${appointment.staff.user.lastName}` : ""}`
           : null,
         staffTitle: appointment.staff?.title ?? null,
-        durationMinutes: appointment.service.durationMinutes,
-        price: appointment.service.expectedPrice?.toString() ?? null,
+        durationMinutes: bookedDurationMinutes(appointment),
+        price: bookedPrice(appointment)?.toString() ?? null,
         status: appointment.status,
       })),
     });
@@ -143,8 +144,8 @@ export const getCustomerAppointments = async (req: AuthenticatedRequest, res: Re
         ? `${a.staff.user.firstName}${a.staff.user.lastName ? ` ${a.staff.user.lastName}` : ""}`
         : null,
       staffTitle: a.staff?.title ?? null,
-      durationMinutes: a.service.durationMinutes,
-      price: a.service.expectedPrice?.toString() ?? null,
+      durationMinutes: bookedDurationMinutes(a),
+      price: bookedPrice(a)?.toString() ?? null,
       status: a.status,
     });
 
@@ -176,6 +177,11 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
     return res.status(400).json({ success: false, message: "Choose a valid provider for this appointment" });
   }
 
+  if (body.customerNotes !== undefined && body.customerNotes !== null &&
+      (typeof body.customerNotes !== "string" || Array.from(body.customerNotes).length > 500)) {
+    return res.status(400).json({ success: false, message: "Notes must be text of at most 500 characters" });
+  }
+  const customerNotes = typeof body.customerNotes === "string" ? body.customerNotes.trim() || null : null;
   const startsAt = new Date(startsAtValue);
   if (!Number.isFinite(startsAt.getTime())) {
     return res.status(400).json({ success: false, message: "Choose a valid appointment time" });
@@ -213,7 +219,7 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
           startsAt,
           availability.service.durationMinutes,
           existing.scheduledStart,
-          existing.service.durationMinutes,
+          bookedDurationMinutes(existing),
         ),
       );
       if (hasOverlappingCustomerBooking) {
@@ -223,11 +229,28 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
         );
       }
 
+      const serviceSnapshot = await transaction.service.findUniqueOrThrow({
+        where: { id: serviceId },
+        select: { durationMinutes: true, expectedPrice: true, bufferAfterMinutes: true },
+      });
+      const snapshot = createBookingSnapshot(startsAt, serviceSnapshot);
       return transaction.appointment.create({
         data: {
           customerId: req.user!.userId,
           serviceId,
           scheduledStart: startsAt,
+          ...snapshot,
+          customerNotes,
+          events: {
+            create: {
+              type: "CREATED",
+              actor: "CUSTOMER",
+              actorUserId: req.user!.userId,
+              newStatus: "CONFIRMED",
+              newScheduledStart: startsAt,
+              newScheduledEnd: snapshot.scheduledEnd,
+            },
+          },
           ...(providerKind === "sole"
             ? { soleProviderId: id }
             : { businessId: id, staffId: staffId! }),
@@ -253,7 +276,7 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
       appointment: {
         id: appointment.id,
         service: appointment.service.name,
-        durationMinutes: appointment.service.durationMinutes,
+        durationMinutes: bookedDurationMinutes(appointment),
         startsAt: appointment.scheduledStart,
         status: appointment.status,
       },
