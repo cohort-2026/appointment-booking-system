@@ -2,6 +2,7 @@ export interface ServicePayload {
   name?: string;
   description?: string | null;
   durationMinutes?: number;
+  bufferAfterMinutes?: number;
   expectedPrice?: number | null;
   active?: boolean;
 }
@@ -21,6 +22,7 @@ const SERVICE_FIELDS = new Set([
   "name",
   "description",
   "durationMinutes",
+  "bufferAfterMinutes",
   "expectedPrice",
   "active",
 ]);
@@ -66,6 +68,13 @@ export function parseServicePayload(
       return { ok: false, error: "Service duration must be a whole number between 1 and 1440 minutes" };
     }
     data.durationMinutes = body.durationMinutes as number;
+  }
+
+  if (Object.hasOwn(body, "bufferAfterMinutes")) {
+    if (!Number.isInteger(body.bufferAfterMinutes) || (body.bufferAfterMinutes as number) < 0 || (body.bufferAfterMinutes as number) > 1440) {
+      return { ok: false, error: "Cleanup must be a whole number between 0 and 1440 minutes" };
+    }
+    data.bufferAfterMinutes = body.bufferAfterMinutes as number;
   }
 
   if (Object.hasOwn(body, "expectedPrice")) {

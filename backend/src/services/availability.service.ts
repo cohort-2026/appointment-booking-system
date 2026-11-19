@@ -1,3 +1,4 @@
+import { parseBookingDate, bookingWeekday } from "../lib/time.js";
 export type AvailabilityWindow = {
   dayOfWeek: number;
   startTime: string;
@@ -26,20 +27,7 @@ export function timeRangesOverlap(
   return firstStart.getTime() < secondEnd && firstEnd > secondStart.getTime();
 }
 
-export function parseLocalDate(value: string): Date | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return null;
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const date = new Date(year, month - 1, day);
-  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
-    return null;
-  }
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
+export const parseLocalDate = parseBookingDate;
 
 function parseMinutes(value: string): number | null {
   const match = /^(\d{2}):(\d{2})$/.exec(value);
@@ -85,35 +73,38 @@ export function intersectAvailabilityWindows(
 export function generateAppointmentSlots(input: {
   date: string;
   durationMinutes: number;
+  bufferAfterMinutes?: number;
   availability: AvailabilityWindow[];
   bookedRanges: BookedRange[];
   now?: Date;
 }): AppointmentSlot[] {
-  const date = parseLocalDate(input.date);
-  if (!date || !Number.isInteger(input.durationMinutes) || input.durationMinutes <= 0) return [];
-
+  const date = parseBookingDate(input.date);
+  const buffer = input.bufferAfterMinutes ?? 0;
+  if (!date || !Number.isInteger(input.durationMinutes) || input.durationMinutes <= 0 ||
+      !Number.isInteger(buffer) || buffer < 0) return [];
+  const duration = input.durationMinutes + buffer;
   const now = input.now ?? new Date();
-  const dayOfWeek = date.getDay();
+  const dayOfWeek = bookingWeekday(date);
+  // Merge overlapping/adjacent working intervals, preserving actual breaks.
+  const intervals = input.availability.filter(w => w.active && w.dayOfWeek === dayOfWeek)
+    .map(w => [parseMinutes(w.startTime), parseMinutes(w.endTime)])
+    .filter((p): p is [number, number] => p[0] !== null && p[1] !== null && p[0]! < p[1]!)
+    .sort((a, b) => a[0] - b[0]);
+  const merged: Array<[number, number]> = [];
+  for (const [start, end] of intervals) {
+    const last = merged.at(-1);
+    if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+    else merged.push([start, end]);
+  }
   const slots: AppointmentSlot[] = [];
-
-  for (const window of input.availability) {
-    if (!window.active || window.dayOfWeek !== dayOfWeek) continue;
-    const windowStart = parseMinutes(window.startTime);
-    const windowEnd = parseMinutes(window.endTime);
-    if (windowStart === null || windowEnd === null || windowStart >= windowEnd) continue;
-
-    for (let startMinute = windowStart; startMinute + input.durationMinutes <= windowEnd; startMinute += input.durationMinutes) {
-      const startsAt = new Date(date);
-      startsAt.setMinutes(startMinute);
+  for (const [start, end] of merged) {
+    for (let minute = Math.ceil(start / 15) * 15; minute + duration <= end; minute += 15) {
+      const startsAt = new Date(date.getTime() + minute * 60_000);
       if (startsAt <= now) continue;
-
-      const isBooked = input.bookedRanges.some((booking) =>
-        timeRangesOverlap(startsAt, input.durationMinutes, booking.start, booking.durationMinutes),
-      );
-
+      const isBooked = input.bookedRanges.some(booking =>
+        timeRangesOverlap(startsAt, duration, booking.start, booking.durationMinutes));
       slots.push({ startsAt, status: isBooked ? "BOOKED" : "AVAILABLE" });
     }
   }
-
-  return slots.sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
+  return slots;
 }
