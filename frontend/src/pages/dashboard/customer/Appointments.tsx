@@ -7,10 +7,10 @@ type AppointmentResponse = { success: boolean; upcoming: Appointment[]; past: Ap
 type Filter = "Upcoming" | "Past" | "All";
 
 function appointmentDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-ZA", { timeZone: "Africa/Johannesburg", weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(new Date(value));
 }
 function appointmentTime(value: string) {
-  return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-ZA", { timeZone: "Africa/Johannesburg", hour: "numeric", minute: "2-digit" }).format(new Date(value)) + " SAST";
 }
 
 export default function Appointments() {

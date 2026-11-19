@@ -127,6 +127,7 @@ export const getBusinessServices = async (req: AuthenticatedRequest, res: Respon
         name: service.name,
         description: service.description,
         durationMinutes: service.durationMinutes,
+        bufferAfterMinutes: service.bufferAfterMinutes,
         expectedPrice: service.expectedPrice,
         active: service.active,
         assignedStaffIds: service.staffAssignments.map((assignment) => assignment.staffId),
@@ -172,6 +173,7 @@ export const createBusinessService = async (req: AuthenticatedRequest, res: Resp
         data: {
           name: parsed.data.name!,
           durationMinutes: parsed.data.durationMinutes!,
+          bufferAfterMinutes: parsed.data.bufferAfterMinutes ?? 0,
           ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {}),
           ...(parsed.data.expectedPrice !== undefined ? { expectedPrice: parsed.data.expectedPrice } : {}),
           businessId: business.id,

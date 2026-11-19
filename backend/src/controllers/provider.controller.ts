@@ -134,6 +134,7 @@ export const createProviderServicePhase1 = async (req: AuthenticatedRequest, res
       data: {
         name: parsed.data.name!,
         durationMinutes: parsed.data.durationMinutes!,
+          bufferAfterMinutes: parsed.data.bufferAfterMinutes ?? 0,
         ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {}),
         ...(parsed.data.expectedPrice !== undefined ? { expectedPrice: parsed.data.expectedPrice } : {}),
         ...(parsed.data.active !== undefined ? { active: parsed.data.active } : {}),

@@ -128,6 +128,7 @@ export default function AppRoutes() {
       >
         <Route index element={<CustomerDashboard />} />
         <Route path="book" element={<CustomerBook />} />
+        <Route path="book/:id" element={<ProviderProfile dashboard />} />
         <Route path="appointments" element={<CustomerAppointments />} />
         <Route path="appointments/:id" element={<CustomerAppointmentDetails />} />
         <Route path="profile" element={<CustomerProfile />} />
