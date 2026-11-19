@@ -483,30 +483,12 @@ export default function BusinessPackage() {
             </div>
           </section>
 
-          {/* Payment Method & Status */}
+          {/* Billing status */}
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-            <h3 className="text-xl font-bold text-slate-900">Payment Method &amp; Status</h3>
+            <h3 className="text-xl font-bold text-slate-900">Billing</h3>
             <p className="mt-0.5 text-xs text-slate-500">
-              Subscription billing method on file for automatic renewals.
+              Online payments are not set up yet, so no payment method is on file.
             </p>
-
-            <div className="mt-6 flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-3">
-                <span className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 font-mono text-xs font-bold text-slate-800 shadow-xs">
-                  <Icons.CreditCard /> CARD
-                </span>
-                <span className="text-sm font-semibold text-slate-800">•••• •••• •••• 4242</span>
-                <span className="text-xs text-slate-400">Expires 12/28</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => toast("Card management portal available upon production billing connection.")}
-                className="w-fit rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50"
-              >
-                Edit Card
-              </button>
-            </div>
           </section>
         </div>
 
