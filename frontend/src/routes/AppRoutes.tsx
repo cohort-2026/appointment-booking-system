@@ -52,7 +52,6 @@ import BusinessAppointments from "../pages/dashboard/business/Appointments";
 import BusinessPackage from "../pages/dashboard/business/Package";
 import UpgradePlans from "../pages/dashboard/business/UpgradePlans";
 import PackageCheckout from "../pages/dashboard/business/PackageCheckout";
-import PackageSuccess from "../pages/dashboard/business/PackageSuccess";
 import BusinessProfilePage from "../pages/dashboard/business/Profile";
 import BusinessAnalytics from "../pages/dashboard/business/Analytics";
 
@@ -154,7 +153,7 @@ export default function AppRoutes() {
         <Route path="analytics" element={<BusinessAnalytics />} />
         <Route path="package/plans" element={<UpgradePlans />} />
         <Route path="package/checkout" element={<PackageCheckout />} />
-        <Route path="package/success" element={<PackageSuccess />} />
+        <Route path="package/success" element={<Navigate to="/dashboard/business/package/plans" replace />} />
         <Route path="profile" element={<BusinessProfilePage />} />
       </Route>
 
