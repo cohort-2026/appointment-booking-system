@@ -1,3 +1,5 @@
+import { MIN_RECOVERY_MINUTES } from "./booking-buffer.js";
+
 export interface ServicePayload {
   name?: string;
   description?: string | null;
@@ -71,8 +73,8 @@ export function parseServicePayload(
   }
 
   if (Object.hasOwn(body, "bufferAfterMinutes")) {
-    if (!Number.isInteger(body.bufferAfterMinutes) || (body.bufferAfterMinutes as number) < 0 || (body.bufferAfterMinutes as number) > 1440) {
-      return { ok: false, error: "Cleanup must be a whole number between 0 and 1440 minutes" };
+    if (!Number.isInteger(body.bufferAfterMinutes) || (body.bufferAfterMinutes as number) < MIN_RECOVERY_MINUTES || (body.bufferAfterMinutes as number) > 1440) {
+      return { ok: false, error: `Cleanup must be a whole number between ${MIN_RECOVERY_MINUTES} and 1440 minutes` };
     }
     data.bufferAfterMinutes = body.bufferAfterMinutes as number;
   }

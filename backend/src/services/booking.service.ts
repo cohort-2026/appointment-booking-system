@@ -1,4 +1,5 @@
 import { bookedDurationMinutes, createBookingSnapshot } from "../lib/booking-snapshot.js";
+import { MIN_RECOVERY_MINUTES } from "../lib/booking-buffer.js";
 import prisma from "../lib/prisma.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import { BOOKING_TIME_ZONE, DAY_MS, bookingDate, bookingWeekday, bookingTimeLabel, parseBookingDate } from "../lib/time.js";
@@ -20,7 +21,7 @@ export type BookingAvailability = {
   service: { id: string; name: string; durationMinutes: number; bufferAfterMinutes: number; expectedPrice: Prisma.Decimal | null };
   staff: Array<{ id: string; name: string }>;
   selectedStaffId: string | null;
-  slots: Array<{ startsAt: string; endsAt: string; label: string; status: "AVAILABLE" | "BOOKED" }>;
+  slots: Array<{ startsAt: string; endsAt: string; label: string; status: "AVAILABLE" | "BOOKED"; recoveryUntil?: string }>;
 };
 const serviceSelect = { id: true, name: true, durationMinutes: true, bufferAfterMinutes: true, expectedPrice: true } as const;
 const hoursSelect = { dayOfWeek: true, startTime: true, endTime: true, active: true } as const;
@@ -49,6 +50,7 @@ export async function resolveBookingAvailability(db: DatabaseClient, input: Book
       !Number.isInteger(service.bufferAfterMinutes) || service.bufferAfterMinutes < 0) {
     throw new BookingError("This service needs a valid duration and cleanup time", 422);
   }
+  service.bufferAfterMinutes = Math.max(service.bufferAfterMinutes, MIN_RECOVERY_MINUTES);
   let windows = provider.availability;
   let staff: BookingAvailability["staff"] = [];
   if (input.providerKind === "business") {
@@ -71,14 +73,16 @@ export async function resolveBookingAvailability(db: DatabaseClient, input: Book
     status: { in: ["CONFIRMED", "RESCHEDULED"] }, scheduledStart: { lt: new Date(date.getTime() + DAY_MS) },
   }, include: { service: { select: { durationMinutes: true } } } });
   const bookedRanges = appointments.map(a => ({ start: a.scheduledStart,
-    durationMinutes: bookedDurationMinutes(a) + a.bufferAfterMinutesAtBooking }))
-    .filter(a => a.start.getTime() + a.durationMinutes * 60_000 > date.getTime());
+    durationMinutes: bookedDurationMinutes(a),
+    bufferAfterMinutes: Math.max(a.bufferAfterMinutesAtBooking, MIN_RECOVERY_MINUTES) }))
+    .filter(a => a.start.getTime() + (a.durationMinutes + a.bufferAfterMinutes) * 60_000 > date.getTime());
   const slots = generateAppointmentSlots({ date: input.date, durationMinutes: service.durationMinutes,
     bufferAfterMinutes: service.bufferAfterMinutes, availability: windows, bookedRanges, now });
   return { timeZone: provider.timeZone, cancellationCutoffHours: provider.cancellationCutoffHours, service, staff,
     selectedStaffId: input.providerKind === "business" ? input.staffId! : null,
     slots: slots.map(s => ({ startsAt: s.startsAt.toISOString(), endsAt: new Date(s.startsAt.getTime() + service.durationMinutes * 60_000).toISOString(),
-      label: bookingTimeLabel(s.startsAt), status: s.status })) };
+      label: bookingTimeLabel(s.startsAt), status: s.status,
+      ...(s.recoveryUntil ? { recoveryUntil: s.recoveryUntil.toISOString() } : {}) })) };
 }
 
 export type CreateBookingInput = {

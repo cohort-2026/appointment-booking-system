@@ -9,11 +9,13 @@ export type AvailabilityWindow = {
 export type BookedRange = {
   start: Date;
   durationMinutes: number;
+  bufferAfterMinutes?: number;
 };
 
 export type AppointmentSlot = {
   startsAt: Date;
   status: "AVAILABLE" | "BOOKED";
+  recoveryUntil?: Date;
 };
 
 export function timeRangesOverlap(
@@ -96,13 +98,29 @@ export function generateAppointmentSlots(input: {
     if (last && start <= last[1]) last[1] = Math.max(last[1], end);
     else merged.push([start, end]);
   }
+  const occupied = input.bookedRanges.map(booking => {
+    const start = booking.start.getTime();
+    const serviceEnd = start + booking.durationMinutes * 60_000;
+    const occupiedMinutes = booking.durationMinutes + (booking.bufferAfterMinutes ?? 0);
+    return { start: booking.start, serviceEnd, occupiedMinutes, end: start + occupiedMinutes * 60_000 };
+  });
   const slots: AppointmentSlot[] = [];
   for (const [start, end] of merged) {
-    for (let minute = Math.ceil(start / 15) * 15; minute + duration <= end; minute += 15) {
+    for (let minute = Math.ceil(start / 15) * 15; minute < end; minute += 15) {
       const startsAt = new Date(date.getTime() + minute * 60_000);
       if (startsAt <= now) continue;
-      const isBooked = input.bookedRanges.some(booking =>
-        timeRangesOverlap(startsAt, duration, booking.start, booking.durationMinutes));
+      const instant = startsAt.getTime();
+      const duringAppointment = occupied.some(range => instant >= range.start.getTime() && instant < range.serviceEnd);
+      const recoveryEnd = duringAppointment ? 0 : occupied.reduce((latest, range) =>
+        instant >= range.serviceEnd && instant < range.end ? Math.max(latest, range.end) : latest, 0);
+      // Include disabled recovery blocks even when a full service would not fit near closing.
+      if (recoveryEnd) {
+        slots.push({ startsAt, status: "BOOKED", recoveryUntil: new Date(recoveryEnd) });
+        continue;
+      }
+      if (minute + duration > end) continue;
+      const isBooked = occupied.some(booking =>
+        timeRangesOverlap(startsAt, duration, booking.start, booking.occupiedMinutes));
       slots.push({ startsAt, status: isBooked ? "BOOKED" : "AVAILABLE" });
     }
   }

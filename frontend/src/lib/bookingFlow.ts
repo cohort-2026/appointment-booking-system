@@ -23,12 +23,11 @@ export function safeCustomerReturnPath(value: unknown): string | null {
   }
 }
 
-export function postLoginDestination(user: { id: string; role: string }, requestedReturnTo: unknown): string | null {
-  if (user.role !== "CUSTOMER") return getDashboardPath(user.role);
-  const explicit = safeCustomerReturnPath(requestedReturnTo);
-  if (explicit) return explicit;
-  const draft = readBookingDraft();
-  return draft && draftBelongsToCustomer(draft, user.id) ? bookingDraftPath(draft) : "/dashboard/customer";
+export function postLoginDestination(user: { role: string }, requestedReturnTo: unknown): string | null {
+  if (user.role === "CUSTOMER") {
+    return safeCustomerReturnPath(requestedReturnTo) ?? getDashboardPath(user.role);
+  }
+  return getDashboardPath(user.role);
 }
 
 export function validateBookingSelection(input: {
@@ -58,16 +57,15 @@ export async function finishVerifiedBooking(
   const dashboard = getDashboardPath(user.role) ?? "/";
   if (user.role !== "CUSTOMER") return { destination: dashboard, message: "Email verified!", error: false };
   const explicit = safeCustomerReturnPath(returnTo);
+  if (!explicit) return { destination: dashboard, message: "Email verified!", error: false };
+
   const draft = readBookingDraft();
-  // An email appointment link (or another explicit destination) is not a booking request.
-  if (explicit && (!draft || explicit !== bookingDraftPath(draft))) {
+  // Only a verification initiated for this draft can complete the booking.
+  if (!draft || explicit !== bookingDraftPath(draft) || !draftBelongsToCustomer(draft, user.id)) {
     return { destination: explicit, message: "Email verified!", error: false };
   }
-  if (!draft || !draftBelongsToCustomer(draft, user.id)) {
-    return { destination: explicit ?? dashboard, message: "Email verified!", error: false };
-  }
 
-  const recoveryPath = bookingDraftPath(draft);
+  const recoveryPath = explicit;
   const boundDraft = { ...draft, customerId: user.id };
   if (!saveBookingDraft(boundDraft)) {
     return { destination: recoveryPath, message: "Email verified, but your browser could not preserve the booking. Please choose it again.", error: true };

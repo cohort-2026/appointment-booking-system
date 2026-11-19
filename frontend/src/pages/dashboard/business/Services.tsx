@@ -137,7 +137,7 @@ export default function BusinessServices() {
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formDuration, setFormDuration] = useState(30);
-  const [formBuffer, setFormBuffer] = useState(0);
+  const [formBuffer, setFormBuffer] = useState(15);
   const [formPrice, setFormPrice] = useState("");
   const [formStaffIds, setFormStaffIds] = useState<string[]>([]);
   const [staffSelectOpen, setStaffSelectOpen] = useState(false);
@@ -175,7 +175,7 @@ export default function BusinessServices() {
     setFormName("");
     setFormDescription("");
     setFormDuration(30);
-    setFormBuffer(0);
+    setFormBuffer(15);
     setFormPrice("");
     setFormStaffIds(staffOptions.length === 1 ? [staffOptions[0]!.id] : []);
     setStaffSelectOpen(false);
@@ -187,7 +187,7 @@ export default function BusinessServices() {
     setFormName(svc.name);
     setFormDescription(svc.description ?? "");
     setFormDuration(svc.durationMinutes);
-    setFormBuffer(svc.bufferAfterMinutes ?? 0);
+    setFormBuffer(svc.bufferAfterMinutes ?? 15);
     setFormPrice(svc.expectedPrice ? String(svc.expectedPrice) : "");
     setFormStaffIds(svc.assignedStaffIds ?? []);
     setStaffSelectOpen(false);
@@ -579,7 +579,7 @@ export default function BusinessServices() {
                     <div className="flex items-center justify-between text-xs text-slate-600">
                       <div className="flex items-center gap-1.5 font-medium text-slate-500">
                         <Icons.Clock />
-                        <span>{svc.durationMinutes} mins + {svc.bufferAfterMinutes ?? 0} mins cleanup</span>
+                        <span>{svc.durationMinutes} mins + {svc.bufferAfterMinutes ?? 15} mins cleanup</span>
                       </div>
                       <div className="font-bold text-slate-900 text-sm">
                         {svc.expectedPrice ? `R${svc.expectedPrice}` : "Free / Inquire"}
@@ -661,7 +661,7 @@ export default function BusinessServices() {
               </div>
 
               <label className="block text-sm font-semibold">Cleanup after service (minutes)
-                <input required type="number" min={0} max={1440} value={formBuffer} onChange={e => setFormBuffer(Number(e.target.value))} className="mt-2 block w-full rounded-xl border border-slate-200 p-3" />
+                <input required type="number" min={15} max={1440} value={formBuffer} onChange={e => setFormBuffer(Number(e.target.value))} className="mt-2 block w-full rounded-xl border border-slate-200 p-3" />
               </label>
               <div className="grid grid-cols-2 gap-4">
                 <div>

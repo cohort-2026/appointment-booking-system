@@ -8,7 +8,9 @@ Public provider pages remain bookable. Customer Find a service links to /dashboa
 
 Dates and slots use Africa/Johannesburg (SAST), independent of browser/server timezone. Inline sign-in and the existing registration/verification continuation retain booking intent and notes. Draft ownership and expiry are checked; successful creation clears the draft. A conflict refreshes availability and retains service/notes. Confirmation reloads the saved appointment by ID, including saved duration/price, contact details, notes and an ICS download.
 
-Business and sole-provider service forms can edit cleanup buffer minutes (integer 0–1440). Buffer reserves resource time without extending the customer's displayed service duration.
+Services default to 15 minutes of recovery after the appointment ends. Business and sole-provider forms can set a longer buffer, up to 1440 minutes. Recovery blocks the same staff member or sole provider without extending the customer's displayed service duration. For an appointment ending at 11:00 with the default buffer, 11:00 is blocked and 11:15 is eligible, subject to other availability rules. Recovery slots are disabled and show when recovery ends.
+
+The recovery migration raises existing service settings below 15 minutes and keeps larger values. Legacy appointment snapshots remain intact. The availability engine applies the 15-minute minimum to their occupied time. Deploy the migration with the updated backend and provider forms.
 
 ## Backend contract
 

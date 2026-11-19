@@ -30,8 +30,8 @@ try {
     INSERT INTO "Business"(id,"ownerUserId",name,"updatedAt") VALUES ('biz','owner','Test Studio',now());
     INSERT INTO "BusinessStaff"(id,"businessId","userId","updatedAt") VALUES ('worker','biz','worker-user',now());
     INSERT INTO "SoleProvider"(id,"userId","displayName","updatedAt") VALUES ('sole','sole-user','Independent',now());
-    INSERT INTO "Service"(id,"businessId","soleProviderId",name,"durationMinutes","bufferAfterMinutes","expectedPrice","updatedAt") VALUES
-      ('business-service','biz',NULL,'Consultation',120,15,300,now()),('sole-service',NULL,'sole','Independent consultation',120,15,NULL,now());
+    INSERT INTO "Service"(id,"businessId","soleProviderId",name,"durationMinutes","expectedPrice","updatedAt") VALUES
+      ('business-service','biz',NULL,'Consultation',120,300,now()),('sole-service',NULL,'sole','Independent consultation',120,NULL,now());
     INSERT INTO "StaffService"(id,"staffId","serviceId") VALUES ('assignment','worker','business-service');
     INSERT INTO "BusinessAvailability"(id,"businessId","dayOfWeek","startTime","endTime","updatedAt") SELECT 'bh'||d,'biz',d,'09:00','17:00',now() FROM generate_series(0,6) d;
     INSERT INTO "Availability"(id,"soleProviderId","dayOfWeek","startTime","endTime","updatedAt") SELECT 'sh'||d,'sole',d,'09:00','17:00',now() FROM generate_series(0,6) d;`);
@@ -67,10 +67,23 @@ try {
   await check('snapshots and cleanup survive later service edits',async()=>{
     booked=await createBooking({...business,customerNotes:'Please call on arrival'});
     assert.equal(booked.priceAtBooking.toString(),'300');assert.equal(+booked.scheduledEnd,+start+120*60_000);assert.equal(booked.bufferAfterMinutesAtBooking,15);
-    await prisma.service.update({where:{id:'business-service'},data:{durationMinutes:30,expectedPrice:999,bufferAfterMinutes:0}});
+    await prisma.service.update({where:{id:'business-service'},data:{durationMinutes:30,expectedPrice:999,bufferAfterMinutes:30}});
     const r=await resolveBookingAvailability(prisma,available);
-    assert.equal(r.slots.find(s=>Date.parse(s.startsAt)===+start+120*60_000).status,'BOOKED');
-    assert.equal(r.slots.find(s=>Date.parse(s.startsAt)===+start+135*60_000).status,'AVAILABLE');
+    const serviceEnd = new Date(+start + 120 * 60_000);
+    const recoveryEnd = new Date(+start + 135 * 60_000);
+    const recovery = r.slots.find(s => s.startsAt === serviceEnd.toISOString());
+    assert.equal(recovery.status, 'BOOKED');
+    assert.equal(recovery.recoveryUntil, recoveryEnd.toISOString());
+    assert.equal(r.slots.find(s => s.startsAt === recoveryEnd.toISOString()).status, 'AVAILABLE');
+    // Historical zero snapshots still receive the minimum in the live availability engine.
+    await prisma.appointment.update({ where: { id: booked.id }, data: { bufferAfterMinutesAtBooking: 0 } });
+    await assert.rejects(createBooking({ ...business, customerId: 'c2', startsAt: serviceEnd }), e => e.status === 409);
+    const next = await createBooking({ ...business, customerId: 'c2', startsAt: recoveryEnd });
+    assert.equal(+next.scheduledStart, +recoveryEnd);
+    assert.equal(next.bufferAfterMinutesAtBooking, 30);
+    await prisma.appointmentEvent.deleteMany({ where: { appointmentId: next.id } });
+    await prisma.appointment.delete({ where: { id: next.id } });
+    await prisma.appointment.update({ where: { id: booked.id }, data: { bufferAfterMinutesAtBooking: 15 } });
   });
   await check('S2 can exclude its authorized current appointment and retain its saved interval',async()=>{
     const r=await resolveBookingAvailability(prisma,{...available,excludeAppointmentId:booked.id,snapshot:{durationMinutes:120,bufferAfterMinutes:15}});

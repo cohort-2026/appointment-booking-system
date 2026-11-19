@@ -16,7 +16,7 @@ type Service = {
 
 type ServicesResponse = { success: boolean; services: Service[] };
 type ServiceForm = { name: string; description: string; durationMinutes: number; bufferAfterMinutes: number; expectedPrice: string };
-const EMPTY_FORM: ServiceForm = { name: "", description: "", durationMinutes: 30, bufferAfterMinutes: 0, expectedPrice: "" };
+const EMPTY_FORM: ServiceForm = { name: "", description: "", durationMinutes: 30, bufferAfterMinutes: 15, expectedPrice: "" };
 
 export default function Services() {
   const [services, setServices] = useState<Service[]>([]);
@@ -79,7 +79,7 @@ export default function Services() {
       name: service.name,
       description: service.description ?? "",
       durationMinutes: service.durationMinutes,
-      bufferAfterMinutes: service.bufferAfterMinutes ?? 0,
+      bufferAfterMinutes: service.bufferAfterMinutes ?? 15,
       expectedPrice: service.expectedPrice === null ? "" : String(service.expectedPrice),
     });
     setIsModalOpen(true);
@@ -163,7 +163,7 @@ export default function Services() {
         ) : (
           <div className="divide-y divide-slate-100">
             {services.map((service) => <div key={service.id} className="m-4 flex flex-col justify-between gap-5 rounded-xl border border-slate-200 p-5 transition hover:border-slate-300 hover:bg-slate-50 sm:flex-row sm:items-center">
-              <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-3"><h2 className="font-semibold text-slate-900">{service.name}</h2><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${service.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{service.active ? "Active" : "Paused"}</span></div><p className="mt-1 text-sm text-slate-500">{service.description || "No description provided."}</p><div className="mt-2 flex flex-wrap gap-4 text-sm font-medium text-slate-600"><span>{service.durationMinutes} mins + {service.bufferAfterMinutes ?? 0} mins cleanup</span><span>{service.expectedPrice === null ? "Price not set" : `R${Number(service.expectedPrice).toFixed(2)} expected`}</span></div></div>
+              <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-3"><h2 className="font-semibold text-slate-900">{service.name}</h2><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${service.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{service.active ? "Active" : "Paused"}</span></div><p className="mt-1 text-sm text-slate-500">{service.description || "No description provided."}</p><div className="mt-2 flex flex-wrap gap-4 text-sm font-medium text-slate-600"><span>{service.durationMinutes} mins + {service.bufferAfterMinutes ?? 15} mins cleanup</span><span>{service.expectedPrice === null ? "Price not set" : `R${Number(service.expectedPrice).toFixed(2)} expected`}</span></div></div>
               <div className="flex flex-wrap items-center gap-2 sm:justify-end"><button type="button" onClick={() => openEditService(service)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white">Edit</button><button type="button" onClick={() => void handleToggleActive(service)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white">{service.active ? "Pause" : "Resume"}</button><button type="button" onClick={() => void handleDelete(service)} className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50">Delete</button></div>
             </div>)}
           </div>
@@ -177,7 +177,7 @@ export default function Services() {
             <label className="block text-sm font-medium text-slate-700">Service name<input required maxLength={100} value={formData.name} onChange={(event) => setFormData({ ...formData, name: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
             <label className="block text-sm font-medium text-slate-700">Description (optional)<textarea maxLength={1000} value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" rows={3} /></label>
             <div className="grid grid-cols-2 gap-4">
-              <label className="block text-sm font-medium text-slate-700">Cleanup after service (minutes)<input required type="number" min={0} max={1440} value={formData.bufferAfterMinutes} onChange={(event) => setFormData({ ...formData, bufferAfterMinutes: Number(event.target.value) })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
+              <label className="block text-sm font-medium text-slate-700">Cleanup after service (minutes)<input required type="number" min={15} max={1440} value={formData.bufferAfterMinutes} onChange={(event) => setFormData({ ...formData, bufferAfterMinutes: Number(event.target.value) })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
               <label className="block text-sm font-medium text-slate-700">Duration (minutes)<input required type="number" min={1} max={1440} value={formData.durationMinutes} onChange={(event) => setFormData({ ...formData, durationMinutes: Number(event.target.value) })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /></label>
               <label className="block text-sm font-medium text-slate-700">Expected price (R)<input type="number" min={0} step="0.01" value={formData.expectedPrice} onChange={(event) => setFormData({ ...formData, expectedPrice: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" /><span className="mt-1 block text-xs text-slate-500">Optional and informational only.</span></label>
             </div>

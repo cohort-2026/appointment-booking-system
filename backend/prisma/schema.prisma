@@ -185,7 +185,7 @@ model Service {
   businessId         String?
   name               String
   description        String?
-  bufferAfterMinutes Int            @default(0)
+  bufferAfterMinutes Int            @default(15)
   durationMinutes    Int
   expectedPrice      Decimal?       @db.Decimal(10, 2)
   active             Boolean        @default(true)
@@ -242,7 +242,7 @@ model Appointment {
   scheduledEnd                DateTime?
   /// Historical backfill uses current service price; unknown price remains null.
   priceAtBooking              Decimal?           @db.Decimal(10, 2)
-  bufferAfterMinutesAtBooking Int                @default(0)
+  bufferAfterMinutesAtBooking Int                @default(15)
   cancelledAt                 DateTime?
   cancelledBy                 AppointmentActor?
   cancellationReason          String?            @db.VarChar(500)

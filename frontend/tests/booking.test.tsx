@@ -23,7 +23,7 @@ beforeEach(()=>{
     if(path==='/api/providers')return json({providers:[provider()]});
     if(path.endsWith('/availability')){
       if(availabilityFails)return json({message:'Availability unavailable'},503);
-      return json({success:true,timeZone:'Africa/Johannesburg',cancellationCutoffHours:24,service:{id:'service',name:'Consultation',durationMinutes:120,bufferAfterMinutes:15,expectedPrice:'300'},staff:kind==='business'?[{id:'staff-record',name:'Sam Staff'}]:[],selectedStaffId:url.searchParams.get('staffId'),slots:kind==='business'&&!url.searchParams.get('staffId')?[]:['09:00','09:15'].map(t=>({startsAt:start(t),endsAt:new Date(Date.parse(start(t))+7_200_000).toISOString(),label:`${t} SAST`,status:conflict&&posts.length&&t==='09:00'?'BOOKED':'AVAILABLE'}))});
+      return json({success:true,timeZone:'Africa/Johannesburg',cancellationCutoffHours:24,service:{id:'service',name:'Consultation',durationMinutes:120,bufferAfterMinutes:15,expectedPrice:'300'},staff:kind==='business'?[{id:'staff-record',name:'Sam Staff'}]:[],selectedStaffId:url.searchParams.get('staffId'),slots:kind==='business'&&!url.searchParams.get('staffId')?[]:['09:00','09:15','11:00','11:15'].map(t=>({startsAt:start(t),endsAt:new Date(Date.parse(start(t))+7_200_000).toISOString(),label:`${t} SAST`,status:t==='11:00'||(conflict&&posts.length&&t==='09:00')?'BOOKED':'AVAILABLE', ...(t==='11:00'?{recoveryUntil:start('11:15')}:{})}))});
     }
     if(path.startsWith('/api/providers/'))return json({provider:provider()});
     if(path==='/api/customer/appointments'&&init?.method==='POST'){
@@ -95,4 +95,19 @@ it('verified signup uses saved notes and routes only to a persisted confirmation
   expect(create).toHaveBeenCalledWith(expect.objectContaining({customerNotes:'Saved notes'}));
   expect(result.destination).toBe('/dashboard/customer/appointments/saved?confirmed=1');
   expect(parseBookingDraft(localStorage.getItem('appointment-booking-draft'))).toBeNull();
+});
+
+it('shows a disabled recovery start and enables the boundary after it', async () => {
+  loggedIn = true;
+  kind = 'sole';
+  const user = userEvent.setup();
+  mount('/dashboard/customer/book/sole%3Aprovider');
+  await user.click(await screen.findByRole('button', { name: /Consultation/ }));
+  await user.click(screen.getByRole('button', { name: 'Choose a time', exact: true }));
+  fireEvent.change(screen.getByLabelText('Choose a date'), { target: { value: date } });
+  const recovery = await screen.findByText('Recovery until 11:15');
+  const blockedStart = recovery.closest('button');
+  expect(blockedStart?.textContent).toContain('11:00 SAST');
+  expect(blockedStart?.disabled).toBe(true);
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: '11:15 SAST', exact: true }).disabled).toBe(false);
 });

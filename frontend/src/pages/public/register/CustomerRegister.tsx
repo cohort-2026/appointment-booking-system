@@ -290,7 +290,7 @@ export default function CustomerRegister() {
 
               <p className="mt-4 text-center text-sm text-slate-500">
                 Already have an account?{" "}
-                <Link to="/login" className="font-semibold text-[#0F172A] underline decoration-sky-300 underline-offset-4">
+                <Link to={safeReturnTo ? `/login?returnTo=${encodeURIComponent(safeReturnTo)}` : "/login"} className="font-semibold text-[#0F172A] underline decoration-sky-300 underline-offset-4">
                   Sign in
                 </Link>
               </p>

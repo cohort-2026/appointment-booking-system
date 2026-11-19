@@ -1,7 +1,7 @@
 import { apiFetch } from "./api";
 
 export type BookingStaffOption = { id: string; name: string };
-export type BookingSlot = { startsAt: string; endsAt: string; label: string; status: "AVAILABLE" | "BOOKED" };
+export type BookingSlot = { startsAt: string; endsAt: string; label: string; status: "AVAILABLE" | "BOOKED"; recoveryUntil?: string };
 
 export type ProviderAvailabilityResponse = {
   success: boolean;

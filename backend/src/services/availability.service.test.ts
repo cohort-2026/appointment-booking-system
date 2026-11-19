@@ -28,12 +28,19 @@ test("full service and cleanup must fit; exact adjacent boundary is allowed", ()
 });
 test("cleanup on existing bookings blocks new starts and candidate cleanup cannot overlap the next visit", () => {
   const slots = generateAppointmentSlots({ ...base, durationMinutes: 30, bufferAfterMinutes: 15,
-    bookedRanges: [{ start: at("10:00"), durationMinutes: 75 }] });
+    bookedRanges: [{ start: at("10:00"), durationMinutes: 60, bufferAfterMinutes: 15 }] });
   const status = (time: string) => slots.find(s => +s.startsAt === +at(time))?.status;
   assert.equal(status("09:15"), "AVAILABLE");
   assert.equal(status("09:30"), "BOOKED");
   assert.equal(status("11:00"), "BOOKED");
+  assert.equal(+slots.find(s => +s.startsAt === +at("11:00"))!.recoveryUntil!, +at("11:15"));
+  assert.equal(slots.find(s => +s.startsAt === +at("10:45"))?.recoveryUntil, undefined);
   assert.equal(status("11:15"), "AVAILABLE");
+});
+test("recovery stays visible near closing even when a service no longer fits", () => {
+  const slots = generateAppointmentSlots({ ...base, durationMinutes: 45, bufferAfterMinutes: 15,
+    bookedRanges: [{ start: at("10:45"), durationMinutes: 60, bufferAfterMinutes: 15 }] });
+  assert.deepEqual(slots.at(-1), { startsAt: at("11:45"), status: "BOOKED", recoveryUntil: at("12:00") });
 });
 test("past starts disappear; gaps stay closed; overlapping hours do not duplicate slots", () => {
   const slots = generateAppointmentSlots({ ...base, durationMinutes: 30, now: at("09:30"),

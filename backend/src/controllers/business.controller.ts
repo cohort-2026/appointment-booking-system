@@ -1,3 +1,4 @@
+import { MIN_RECOVERY_MINUTES } from "../lib/booking-buffer.js";
 import { bookedDurationMinutes, bookedPrice } from "../lib/booking-snapshot.js";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
@@ -173,7 +174,7 @@ export const createBusinessService = async (req: AuthenticatedRequest, res: Resp
         data: {
           name: parsed.data.name!,
           durationMinutes: parsed.data.durationMinutes!,
-          bufferAfterMinutes: parsed.data.bufferAfterMinutes ?? 0,
+          bufferAfterMinutes: parsed.data.bufferAfterMinutes ?? MIN_RECOVERY_MINUTES,
           ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {}),
           ...(parsed.data.expectedPrice !== undefined ? { expectedPrice: parsed.data.expectedPrice } : {}),
           businessId: business.id,
