@@ -1,9 +1,11 @@
+import { bookedDurationMinutes } from "../lib/booking-snapshot.js";
 import { sendAppointmentConfirmationEmail } from "./email.service.js";
 
 type SavedAppointment = {
   id: string;
   status: string;
   scheduledStart: Date;
+  scheduledEnd: Date | null;
   service: { name: string; durationMinutes: number };
   customer: { firstName: string; email: string };
   soleProvider: { displayName: string } | null;
@@ -37,7 +39,7 @@ export async function notifyAppointmentCreated(
         ? `${appointment.staff.user.firstName} ${appointment.staff.user.lastName ?? ""}`.trim()
         : null,
       startsAt: appointment.scheduledStart,
-      durationMinutes: appointment.service.durationMinutes,
+      durationMinutes: bookedDurationMinutes(appointment),
       appointmentUrl,
     });
     return true;

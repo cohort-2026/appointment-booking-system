@@ -9,6 +9,8 @@ export function safeCustomerReturnPath(value: unknown): string | null {
     const url = new URL(value, "https://booking.invalid");
     if (url.origin !== "https://booking.invalid" || url.hash) return null;
     const path = decodeURIComponent(url.pathname);
+    const dashboardBooking = /^\/dashboard\/customer\/book\/((?:sole|business):[A-Za-z0-9_-]+)$/.exec(path);
+    if (dashboardBooking) return `/dashboard/customer/book/${encodeURIComponent(dashboardBooking[1])}`;
     const provider = /^\/providers\/((?:sole|business):[A-Za-z0-9_-]+)$/.exec(path);
     if (provider) return `/providers/${encodeURIComponent(provider[1])}`;
     if (/^\/dashboard\/customer\/appointments\/[A-Za-z0-9_-]+$/.test(path)) {
@@ -21,12 +23,11 @@ export function safeCustomerReturnPath(value: unknown): string | null {
   }
 }
 
-export function postLoginDestination(user: { id: string; role: string }, requestedReturnTo: unknown): string | null {
-  if (user.role !== "CUSTOMER") return getDashboardPath(user.role);
-  const explicit = safeCustomerReturnPath(requestedReturnTo);
-  if (explicit) return explicit;
-  const draft = readBookingDraft();
-  return draft && draftBelongsToCustomer(draft, user.id) ? bookingDraftPath(draft) : "/dashboard/customer";
+export function postLoginDestination(user: { role: string }, requestedReturnTo: unknown): string | null {
+  if (user.role === "CUSTOMER") {
+    return safeCustomerReturnPath(requestedReturnTo) ?? getDashboardPath(user.role);
+  }
+  return getDashboardPath(user.role);
 }
 
 export function validateBookingSelection(input: {
@@ -51,21 +52,20 @@ type VerificationResult = { destination: string; message: string; error: boolean
 export async function finishVerifiedBooking(
   user: { id: string; role: string },
   returnTo: unknown,
-  createBooking: (input: { providerId: string; serviceId: string; startsAt: string; staffId?: string }) => Promise<{ appointment: { id: string } }>,
+  createBooking: (input: { providerId: string; serviceId: string; startsAt: string; staffId?: string; customerNotes?: string }) => Promise<{ appointment: { id: string } }>,
 ): Promise<VerificationResult> {
   const dashboard = getDashboardPath(user.role) ?? "/";
   if (user.role !== "CUSTOMER") return { destination: dashboard, message: "Email verified!", error: false };
   const explicit = safeCustomerReturnPath(returnTo);
+  if (!explicit) return { destination: dashboard, message: "Email verified!", error: false };
+
   const draft = readBookingDraft();
-  // An email appointment link (or another explicit destination) is not a booking request.
-  if (explicit && (!draft || explicit !== bookingDraftPath(draft))) {
+  // Only a verification initiated for this draft can complete the booking.
+  if (!draft || explicit !== bookingDraftPath(draft) || !draftBelongsToCustomer(draft, user.id)) {
     return { destination: explicit, message: "Email verified!", error: false };
   }
-  if (!draft || !draftBelongsToCustomer(draft, user.id)) {
-    return { destination: explicit ?? dashboard, message: "Email verified!", error: false };
-  }
 
-  const recoveryPath = bookingDraftPath(draft);
+  const recoveryPath = explicit;
   const boundDraft = { ...draft, customerId: user.id };
   if (!saveBookingDraft(boundDraft)) {
     return { destination: recoveryPath, message: "Email verified, but your browser could not preserve the booking. Please choose it again.", error: true };
@@ -80,11 +80,12 @@ export async function finishVerifiedBooking(
       serviceId: draft.serviceId,
       startsAt: draft.startsAt,
       ...(draft.staffId ? { staffId: draft.staffId } : {}),
+      ...(draft.customerNotes ? { customerNotes: draft.customerNotes } : {}),
     });
     // Clear only after the server confirms that creation succeeded.
     const cleared = clearBookingDraft();
     return {
-      destination: `${dashboard}?bookedAppointment=${encodeURIComponent(result.appointment.id)}`,
+      destination: `/dashboard/customer/appointments/${encodeURIComponent(result.appointment.id)}?confirmed=1`,
       message: cleared ? "Email verified and your appointment is booked." : "Appointment booked. Browser storage could not be cleared; check My appointments before booking again.",
       error: !cleared,
     };

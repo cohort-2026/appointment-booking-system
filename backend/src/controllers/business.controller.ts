@@ -1,3 +1,5 @@
+import { MIN_RECOVERY_MINUTES } from "../lib/booking-buffer.js";
+import { bookedDurationMinutes, bookedPrice } from "../lib/booking-snapshot.js";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
@@ -126,6 +128,7 @@ export const getBusinessServices = async (req: AuthenticatedRequest, res: Respon
         name: service.name,
         description: service.description,
         durationMinutes: service.durationMinutes,
+        bufferAfterMinutes: service.bufferAfterMinutes,
         expectedPrice: service.expectedPrice,
         active: service.active,
         assignedStaffIds: service.staffAssignments.map((assignment) => assignment.staffId),
@@ -171,6 +174,7 @@ export const createBusinessService = async (req: AuthenticatedRequest, res: Resp
         data: {
           name: parsed.data.name!,
           durationMinutes: parsed.data.durationMinutes!,
+          bufferAfterMinutes: parsed.data.bufferAfterMinutes ?? MIN_RECOVERY_MINUTES,
           ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {}),
           ...(parsed.data.expectedPrice !== undefined ? { expectedPrice: parsed.data.expectedPrice } : {}),
           businessId: business.id,
@@ -614,8 +618,8 @@ export const getBusinessAppointments = async (req: AuthenticatedRequest, res: Re
         time: appointment.scheduledStart,
         customerName: `${appointment.customer.firstName} ${appointment.customer.lastName ?? ""}`.trim(),
         service: appointment.service.name,
-        durationMinutes: appointment.service.durationMinutes,
-        price: appointment.service.expectedPrice === null ? null : Number(appointment.service.expectedPrice),
+        durationMinutes: bookedDurationMinutes(appointment),
+        price: bookedPrice(appointment) === null ? null : Number(bookedPrice(appointment)),
         staffId: appointment.staffId,
         staffName: appointment.staff
           ? `${appointment.staff.user.firstName} ${appointment.staff.user.lastName ?? ""}`.trim()
@@ -762,6 +766,7 @@ export const getBusinessDashboard = async (req: AuthenticatedRequest, res: Respo
             select: {
               id: true,
               scheduledStart: true,
+              scheduledEnd: true,
               status: true,
               service: { select: { durationMinutes: true } },
             },
@@ -779,7 +784,7 @@ export const getBusinessDashboard = async (req: AuthenticatedRequest, res: Respo
       const isBusyNow = member.appointments.some((appt) => {
         if (appt.status !== "CONFIRMED") return false;
         const start = appt.scheduledStart.getTime();
-        const end = start + appt.service.durationMinutes * 60_000;
+        const end = start + bookedDurationMinutes(appt) * 60_000;
         return now.getTime() >= start && now.getTime() < end;
       });
 
