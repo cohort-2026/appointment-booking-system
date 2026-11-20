@@ -117,6 +117,87 @@ try {
     assert.equal((await fetch(`${origin}/api/customer/appointments`,{method:'POST',headers,body:JSON.stringify(body)})).status,400);
     assert.equal((await fetch(`${origin}/api/customer/appointments`,{method:'POST',headers,body:JSON.stringify({...body,startsAt:start.toISOString(),customerNotes:'x'.repeat(501)})})).status,400);
   });
+  const request=async (customer,path,method='GET',body)=>{
+    const response=await fetch(`${origin}/api/customer/appointments${path}`,{
+      method, headers:{authorization:`Bearer ${token(customer)}`,'Content-Type':'application/json'},
+      ...(body!==undefined?{body:JSON.stringify(body)}:{}),
+    });
+    return {status:response.status,...await response.json()};
+  };
+  const manageDay=bookingDate(new Date(Date.now()+3*DAY_MS));
+  const time=(hour,minute=0)=>new Date(+parseBookingDate(manageDay)+(hour*60+minute)*60_000).toISOString();
+  let savedId;
+  await check('HTTP booking opens by ID; unauthorized reads and writes do not disclose it',async()=>{
+    await clear();
+    await prisma.service.update({where:{id:'business-service'},data:{durationMinutes:120,expectedPrice:300,bufferAfterMinutes:30}});
+    const saved=await request('c1','','POST',{providerId:'business:biz',serviceId:'business-service',staffId:'worker',startsAt:time(9)});
+    assert.equal(saved.status,201);
+    savedId=saved.appointment.id;
+    const detail=await request('c1',`/${savedId}`);
+    assert.equal(detail.appointment.canCancel,true);assert.equal(detail.appointment.canReschedule,true);
+    assert.deepEqual(detail.appointment.events.map(event=>event.type),['CREATED']);
+    assert.equal((await request('c2',`/${savedId}/reschedule-options?date=${manageDay}`)).status,404);
+    assert.equal((await request('c2',`/${savedId}/reschedule`,'PATCH',{startsAt:time(10)})).status,404);
+    assert.equal((await request('c2',`/${savedId}/cancel`,'PATCH',{})).status,404);
+  });
+  await check('replacement options exclude only the owned booking; conflict leaves original and history intact',async()=>{
+    await createBooking({...business,customerId:'c2',startsAt:new Date(time(13))});
+    await prisma.service.update({where:{id:'business-service'},data:{durationMinutes:30,expectedPrice:900,bufferAfterMinutes:15}});
+    const options=await request('c1',`/${savedId}/reschedule-options?date=${manageDay}`);
+    assert.equal(options.status,200);
+    assert.equal(options.slots.some(slot=>slot.startsAt===time(9)),false);
+    assert.equal(options.slots.find(slot=>slot.startsAt===time(9,15)).status,'AVAILABLE');
+    assert.equal(options.slots.find(slot=>slot.startsAt===time(13)).status,'BOOKED');
+    assert.equal((await request('c1',`/${savedId}/reschedule`,'PATCH',{startsAt:time(12)})).status,409);
+    assert.equal((await request('c1',`/${savedId}/reschedule`,'PATCH',{startsAt:time(9)})).status,422);
+    const {appointment}=await request('c1',`/${savedId}`);
+    assert.equal(appointment.time,time(9));assert.deepEqual(appointment.events.map(event=>event.type),['CREATED']);
+  });
+  await check('move preserves the reference, snapshot and assigned staff; cancel releases the replacement',async()=>{
+    const move=await request('c1',`/${savedId}/reschedule`,'PATCH',{startsAt:time(9,15)});
+    assert.equal(move.status,200);assert.equal(move.appointment.id,savedId);
+    assert.equal(move.appointment.time,time(9,15));assert.equal(move.appointment.endsAt,time(11,15));
+    assert.equal(move.appointment.price,'300');assert.equal(move.appointment.status,'RESCHEDULED');
+    assert.deepEqual(move.appointment.events.map(event=>event.type),['CREATED','RESCHEDULED']);
+    assert.equal(move.appointment.events[1].oldScheduledStart,time(9));
+    const stored=await prisma.appointment.findUniqueOrThrow({where:{id:savedId}});
+    assert.equal(stored.rescheduleCount,1);assert.equal(stored.staffId,'worker');assert.equal(stored.bufferAfterMinutesAtBooking,30);
+    const publicSlots=()=>resolveBookingAvailability(prisma,{...available,date:manageDay});
+    assert.equal((await publicSlots()).slots.find(slot=>slot.startsAt===time(11,30)).status,'BOOKED');
+    const cancel=await request('c1',`/${savedId}/cancel`,'PATCH',{reason:'Schedule changed'});
+    assert.equal(cancel.status,200);assert.equal(cancel.appointment.status,'CANCELLED');
+    assert.equal(cancel.appointment.canCancel,false);assert.equal(cancel.appointment.canReschedule,false);
+    assert.deepEqual(cancel.appointment.events.map(event=>event.type),['CREATED','RESCHEDULED','CANCELLED']);
+    assert.equal(cancel.appointment.events[2].reason,'Schedule changed');
+    assert.equal((await publicSlots()).slots.find(slot=>slot.startsAt===time(9,15)).status,'AVAILABLE');
+    assert.equal((await request('c1',`/${savedId}/cancel`,'PATCH',{})).status,422);
+    assert.equal((await request('c1',`/${savedId}/reschedule`,'PATCH',{startsAt:time(10)})).status,422);
+    assert.equal(await prisma.appointmentEvent.count({where:{appointmentId:savedId}}),3);
+  });
+  await check('changes inside the cutoff preserve the saved appointment',async()=>{
+    const soon=await prisma.appointment.create({data:{
+      customerId:'c1',serviceId:'sole-service',soleProviderId:'sole',
+      scheduledStart:new Date(Date.now()+3_600_000),scheduledEnd:new Date(Date.now()+7_200_000),
+    }});
+    const {appointment}=await request('c1',`/${soon.id}`);
+    assert.equal(appointment.canCancel,false);assert.equal(appointment.canReschedule,false);
+    assert.equal((await request('c1',`/${soon.id}/reschedule-options?date=${manageDay}`)).status,422);
+    assert.equal((await request('c1',`/${soon.id}/cancel`,'PATCH',{})).status,422);
+    assert.equal((await request('c1',`/${soon.id}/reschedule`,'PATCH',{startsAt:time(10)})).status,422);
+    assert.equal(await prisma.appointmentEvent.count({where:{appointmentId:soon.id}}),0);
+  });
+  await check('rescheduling and another booking cannot both claim a replacement',async()=>{
+    await clear();
+    const source=await createBooking({...business,startsAt:new Date(time(9))});
+    const [move,book]=await Promise.all([
+      request('c1',`/${source.id}/reschedule`,'PATCH',{startsAt:time(12)}),
+      request('c2','','POST',{providerId:'business:biz',serviceId:'business-service',staffId:'worker',startsAt:time(12)}),
+    ]);
+    assert.ok(move.status===200 ? book.status===409 : move.status===409 && book.status===201);
+    assert.equal(await prisma.appointment.count({where:{scheduledStart:new Date(time(12))}}),1);
+    const detail=await request('c1',`/${source.id}`);
+    assert.equal(detail.appointment.events.length,move.status===200?2:1);
+  });
   console.log(`${checks} real PostgreSQL integration checks passed`);
 }finally{
   if(server)await new Promise(r=>server.close(r));if(prisma)await prisma.$disconnect();await sql.end();await admin.query(`DROP DATABASE "${name}"`);await admin.end();

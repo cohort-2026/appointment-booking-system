@@ -1,3 +1,6 @@
+import {
+  changeCustomerAppointment, customerAppointmentDetails, findCustomerAppointment, getReplacementOptions,
+} from "../services/customer-appointment.service.js";
 import { bookingDate, parseBookingDate, DAY_MS } from "../lib/time.js";
 import { bookedDurationMinutes, bookedPrice } from "../lib/booking-snapshot.js";
 import type { Response } from "express";
@@ -5,7 +8,7 @@ import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
 import { BookingError, createBooking } from "../services/booking.service.js";
 
-import { notifyAppointmentCreated } from "../services/appointment-notification.service.js";
+import { notifyAppointmentCreated, notifyCustomerAppointmentChanged } from "../services/appointment-notification.service.js";
 
 export const getCustomerDashboard = async (
   req: AuthenticatedRequest,
@@ -221,32 +224,65 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
 };
 
 
-/** Direct saved confirmation; never search a paginated collection for a detail resource. */
+function appointmentOwner(req: AuthenticatedRequest) {
+  return { id: typeof req.params.id === "string" ? req.params.id : "", customerId: req.user!.userId };
+}
+
+function appointmentError(res: Response, error: unknown) {
+  if (error instanceof BookingError) {
+    return res.status(error.status).json({ success: false, message: error.message });
+  }
+  if (error && typeof error === "object" && "code" in error && error.code === "P2028") {
+    return res.status(503).json({ success: false, message: "The booking service is busy. Please try again." });
+  }
+  console.error("Customer appointment request failed");
+  return res.status(500).json({ success: false, message: "Unable to complete the appointment request" });
+}
+
 export const getCustomerAppointment = async (req: AuthenticatedRequest, res: Response) => {
-  const id = typeof req.params.id === "string" ? req.params.id : "";
   try {
-    const appointment = await prisma.appointment.findFirst({ where: { id, customerId: req.user!.userId },
-      include: { service: { select: { name: true, durationMinutes: true, expectedPrice: true } },
-        business: { select: { name: true, address: true, phone: true, cancellationCutoffHours: true } },
-        soleProvider: { select: { displayName: true, city: true, cancellationCutoffHours: true, user: { select: { phone: true } } } },
-        staff: { select: { user: { select: { firstName: true, lastName: true } } } } } });
-    if (!appointment) return res.status(404).json({ success: false, message: "Appointment not found" });
-    const policy = appointment.business ?? appointment.soleProvider;
-    const cutoff = policy?.cancellationCutoffHours ?? 24;
-    return res.json({ success: true, appointment: {
-      id: appointment.id, time: appointment.scheduledStart, endsAt: appointment.scheduledEnd,
-      service: appointment.service.name, durationMinutes: bookedDurationMinutes(appointment),
-      price: bookedPrice(appointment)?.toString() ?? null, status: appointment.status,
-      timeZone: "Africa/Johannesburg", customerNotes: appointment.customerNotes,
-      providerName: appointment.business?.name ?? appointment.soleProvider?.displayName ?? "Provider",
-      providerId: appointment.businessId ? `business:${appointment.businessId}` : appointment.soleProviderId ? `sole:${appointment.soleProviderId}` : null,
-      staffName: appointment.staff ? `${appointment.staff.user.firstName} ${appointment.staff.user.lastName ?? ""}`.trim() : null,
-      address: appointment.business?.address ?? appointment.soleProvider?.city ?? null,
-      phone: appointment.business?.phone ?? appointment.soleProvider?.user.phone ?? null,
-      cancellationCutoffHours: cutoff,
-      changeDeadline: new Date(appointment.scheduledStart.getTime() - cutoff * 3_600_000),
-    } });
-  } catch {
-    return res.status(500).json({ success: false, message: "Unable to load appointment" });
+    const appointment = await findCustomerAppointment(appointmentOwner(req));
+    return res.json({ success: true, appointment: customerAppointmentDetails(appointment) });
+  } catch (error) {
+    return appointmentError(res, error);
+  }
+};
+
+export const getCustomerRescheduleOptions = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const options = await getReplacementOptions(appointmentOwner(req), typeof req.query.date === "string" ? req.query.date : "");
+    return res.json({ success: true, ...options });
+  } catch (error) {
+    return appointmentError(res, error);
+  }
+};
+
+export const cancelCustomerAppointment = async (req: AuthenticatedRequest, res: Response) => {
+  const reason: unknown = req.body?.reason;
+  if (reason !== undefined && (typeof reason !== "string" || Array.from(reason).length > 500)) {
+    return res.status(400).json({ success: false, message: "The reason must be text of at most 500 characters" });
+  }
+  try {
+    const { appointment, previousStart } = await changeCustomerAppointment(appointmentOwner(req), {
+      action: "cancel", reason: typeof reason === "string" ? reason.trim() || null : null,
+    });
+    void notifyCustomerAppointmentChanged(appointment, "CANCELLED", previousStart);
+    return res.json({ success: true, appointment: customerAppointmentDetails(appointment) });
+  } catch (error) {
+    return appointmentError(res, error);
+  }
+};
+
+export const rescheduleCustomerAppointment = async (req: AuthenticatedRequest, res: Response) => {
+  const value: unknown = req.body?.startsAt;
+  if (typeof value !== "string" || !/(Z|[+-]\d{2}:\d{2})$/i.test(value) || !Number.isFinite(Date.parse(value))) {
+    return res.status(400).json({ success: false, message: "Choose a valid appointment time with a timezone offset" });
+  }
+  try {
+    const { appointment, previousStart } = await changeCustomerAppointment(appointmentOwner(req), { action: "reschedule", startsAt: new Date(value) });
+    void notifyCustomerAppointmentChanged(appointment, "RESCHEDULED", previousStart);
+    return res.json({ success: true, appointment: customerAppointmentDetails(appointment) });
+  } catch (error) {
+    return appointmentError(res, error);
   }
 };

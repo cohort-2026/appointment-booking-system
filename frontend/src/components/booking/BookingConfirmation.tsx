@@ -17,7 +17,7 @@ function calendarFile(a: SavedAppointment) {
 export default function BookingConfirmation({ appointment: a, justBooked }: { appointment: SavedAppointment; justBooked: boolean }) {
   const active = ["CONFIRMED", "RESCHEDULED"].includes(a.status);
   return <div className="space-y-6">
-    {justBooked && active && <section role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900"><h1 className="text-2xl font-bold">Appointment confirmed</h1><p className="mt-2">Your booking is saved. Keep this page for your appointment details.</p></section>}
+    {justBooked && a.status === "CONFIRMED" && <section role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900"><h1 className="text-2xl font-bold">Appointment confirmed</h1><p className="mt-2">Your booking is saved. Keep this page for your appointment details.</p></section>}
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
       <header className="bg-slate-950 p-6 text-white"><p className="text-sm font-semibold text-sky-300">{a.status.replaceAll("_", " ")}</p><h2 className="mt-2 text-2xl font-bold">{a.service}</h2><p className="mt-2 text-slate-300">{a.providerName}</p></header>
       <dl className="grid gap-6 p-6 sm:grid-cols-2">{[
@@ -27,7 +27,6 @@ export default function BookingConfirmation({ appointment: a, justBooked }: { ap
         ["Reference", a.id], ["Your notes", a.customerNotes || "No notes added"],
       ].map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-2 break-words font-medium">{value}</dd></div>)}</dl>
     </section>
-    <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="font-semibold">Before your appointment</h2><p className="mt-2 text-sm leading-6 text-slate-600">Changes must be requested at least {a.cancellationCutoffHours} hours before your appointment. Change deadline: {formatSast(a.changeDeadline)}.</p><p className="mt-2 text-sm text-slate-600">Online cancellation and rescheduling are being connected in S2. For now, contact your provider{a.phone ? ` on ${a.phone}` : " directly"}.</p></section>
     <div className="flex flex-wrap gap-3">{active && <Button onClick={() => calendarFile(a)}>Add to calendar</Button>}
       <Link className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold" to="/dashboard/customer/appointments">My appointments</Link>
       <Link className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold" to="/dashboard/customer/book">Find another service</Link></div>

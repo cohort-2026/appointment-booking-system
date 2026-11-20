@@ -137,3 +137,28 @@ export async function sendStaffInvitationEmail(
     `<p>Hi ${escapeHtml(firstName)},</p><p><strong>${escapeHtml(businessName)}</strong> invited you to join as ${escapeHtml(title)}.</p><p><a href="${escapeHtml(link)}">Accept invitation and set your password</a></p><p>This link expires in 7 days. If you weren't expecting this invitation, you can ignore this email.</p>`,
   );
 }
+
+
+export async function sendAppointmentChangeEmail(input: {
+  to: string;
+  firstName: string;
+  serviceName: string;
+  type: "CANCELLED" | "RESCHEDULED";
+  oldStartsAt: Date;
+  startsAt: Date;
+  appointmentUrl: string;
+}): Promise<void> {
+  const format = new Intl.DateTimeFormat("en-ZA", {
+    dateStyle: "long", timeStyle: "short", timeZone: "Africa/Johannesburg",
+  });
+  const previous = format.format(input.oldStartsAt);
+  const subject = input.type === "CANCELLED" ? "Appointment cancelled" : "Appointment rescheduled";
+  const summary = input.type === "CANCELLED"
+    ? `Your ${input.serviceName} appointment on ${previous} (SAST) was cancelled.`
+    : `Your ${input.serviceName} appointment moved from ${previous} to ${format.format(input.startsAt)} (SAST).`;
+  await sendEmail(
+    input.to, subject,
+    `Hi ${input.firstName}, ${summary}\nView your saved appointment: ${input.appointmentUrl}`,
+    `<p>Hi ${escapeHtml(input.firstName)},</p><p>${escapeHtml(summary)}</p><p><a href="${escapeHtml(input.appointmentUrl)}">View your saved appointment</a></p>`,
+  );
+}
