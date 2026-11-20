@@ -1,9 +1,11 @@
 import { bookedDurationMinutes, createBookingSnapshot } from "../lib/booking-snapshot.js";
 import { MIN_RECOVERY_MINUTES } from "../lib/booking-buffer.js";
 import prisma from "../lib/prisma.js";
-import type { Prisma } from "../generated/prisma/client.js";
+import type { AppointmentStatus, Prisma } from "../generated/prisma/client.js";
 import { BOOKING_TIME_ZONE, DAY_MS, bookingDate, bookingWeekday, bookingTimeLabel, parseBookingDate } from "../lib/time.js";
 import { generateAppointmentSlots, intersectAvailabilityWindows, timeRangesOverlap } from "./availability.service.js";
+
+export const ACTIVE_APPOINTMENT_STATUSES: AppointmentStatus[] = ["CONFIRMED", "RESCHEDULED"];
 
 export class BookingError extends Error {
   constructor(message: string, readonly status: number) { super(message); this.name = "BookingError"; }
@@ -70,7 +72,7 @@ export async function resolveBookingAvailability(db: DatabaseClient, input: Book
   const appointments = await db.appointment.findMany({ where: {
     ...(input.providerKind === "sole" ? { soleProviderId: provider.id } : { staffId: input.staffId! }),
     ...(input.excludeAppointmentId ? { id: { not: input.excludeAppointmentId } } : {}),
-    status: { in: ["CONFIRMED", "RESCHEDULED"] }, scheduledStart: { lt: new Date(date.getTime() + DAY_MS) },
+    status: { in: ACTIVE_APPOINTMENT_STATUSES }, scheduledStart: { lt: new Date(date.getTime() + DAY_MS) },
   }, include: { service: { select: { durationMinutes: true } } } });
   const bookedRanges = appointments.map(a => ({ start: a.scheduledStart,
     durationMinutes: bookedDurationMinutes(a),
@@ -83,6 +85,22 @@ export async function resolveBookingAvailability(db: DatabaseClient, input: Book
     slots: slots.map(s => ({ startsAt: s.startsAt.toISOString(), endsAt: new Date(s.startsAt.getTime() + service.durationMinutes * 60_000).toISOString(),
       label: bookingTimeLabel(s.startsAt), status: s.status,
       ...(s.recoveryUntil ? { recoveryUntil: s.recoveryUntil.toISOString() } : {}) })) };
+}
+
+export async function requireCustomerTimeAvailable(
+  db: DatabaseClient, customerId: string, startsAt: Date, durationMinutes: number, excludeAppointmentId?: string,
+) {
+  const scheduledEnd = new Date(startsAt.getTime() + durationMinutes * 60_000);
+  const bookings = await db.appointment.findMany({
+    where: {
+      customerId, ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {}),
+      status: { in: ACTIVE_APPOINTMENT_STATUSES }, scheduledStart: { lt: scheduledEnd },
+    },
+    include: { service: { select: { durationMinutes: true } } },
+  });
+  if (bookings.some(booking => timeRangesOverlap(
+    startsAt, durationMinutes, booking.scheduledStart, bookedDurationMinutes(booking),
+  ))) throw new BookingError("You already have a booking during this time.", 409);
 }
 
 export type CreateBookingInput = {
@@ -99,11 +117,7 @@ export async function createBooking(input: CreateBookingInput, db: Pick<typeof p
     const slot = availability.slots.find(s => s.startsAt === input.startsAt.toISOString());
     if (!slot || slot.status !== "AVAILABLE") throw new BookingError("That time is no longer available. Choose another slot.", 409);
     const snapshot = createBookingSnapshot(input.startsAt, availability.service);
-    const customerBookings = await tx.appointment.findMany({ where: { customerId: input.customerId,
-      status: { in: ["CONFIRMED", "RESCHEDULED"] }, scheduledStart: { lt: snapshot.scheduledEnd } },
-      include: { service: { select: { durationMinutes: true } } } });
-    if (customerBookings.some(a => timeRangesOverlap(input.startsAt, availability.service.durationMinutes,
-      a.scheduledStart, bookedDurationMinutes(a)))) throw new BookingError("You already have a booking during this time.", 409);
+    await requireCustomerTimeAvailable(tx, input.customerId, input.startsAt, availability.service.durationMinutes);
     return tx.appointment.create({ data: { customerId: input.customerId, serviceId: input.serviceId,
       scheduledStart: input.startsAt, ...snapshot, customerNotes: input.customerNotes ?? null,
       ...(input.providerKind === "sole" ? { soleProviderId: input.providerId } : { businessId: input.providerId, staffId: input.staffId! }),

@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import { CalendarDays, Check, CircleX, Clock3, MapPin, UserRound } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
 import type { SavedAppointment } from "../../services/bookings";
 import { formatSast } from "../../lib/bookingTime";
 import { Button } from "../ui/button";
@@ -16,20 +18,38 @@ function calendarFile(a: SavedAppointment) {
 }
 export default function BookingConfirmation({ appointment: a, justBooked }: { appointment: SavedAppointment; justBooked: boolean }) {
   const active = ["CONFIRMED", "RESCHEDULED"].includes(a.status);
+  const { user } = useAuth();
+  const details = [
+    { label: "When", value: formatSast(a.time), icon: Clock3 },
+    { label: "With", value: a.staffName ?? "Independent provider", icon: UserRound },
+    { label: "Where", value: a.address ?? "Contact your provider for the location", icon: MapPin },
+    { label: "Price", value: a.price === null ? "Price on request" : `R${Number(a.price).toFixed(2)}`, icon: null },
+  ];
   return <div className="space-y-6">
-    {justBooked && active && <section role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900"><h1 className="text-2xl font-bold">Appointment confirmed</h1><p className="mt-2">Your booking is saved. Keep this page for your appointment details.</p></section>}
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <header className="bg-slate-950 p-6 text-white"><p className="text-sm font-semibold text-sky-300">{a.status.replaceAll("_", " ")}</p><h2 className="mt-2 text-2xl font-bold">{a.service}</h2><p className="mt-2 text-slate-300">{a.providerName}</p></header>
-      <dl className="grid gap-6 p-6 sm:grid-cols-2">{[
-        ["Date and time", formatSast(a.time)], ["Duration", `${a.durationMinutes} minutes`],
-        ["Service price", a.price === null ? "Price on request" : `R${Number(a.price).toFixed(2)}`],
-        ["Staff", a.staffName ?? "Independent provider"], ["Location", a.address ?? "Contact your provider for the location"],
-        ["Reference", a.id], ["Your notes", a.customerNotes || "No notes added"],
-      ].map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-2 break-words font-medium">{value}</dd></div>)}</dl>
+    <section role={justBooked && active ? "status" : undefined} className="mx-auto w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+      <header className="text-center">
+        <span className={`mx-auto grid size-11 place-items-center rounded-full ${a.status === "CANCELLED" ? "bg-rose-50 text-rose-600" : "bg-emerald-50 text-emerald-600"}`}>{a.status === "CANCELLED" ? <CircleX className="size-6" /> : <Check className="size-6 stroke-[3]" />}</span>
+        <h1 className="mt-3 text-xl font-extrabold tracking-tight text-slate-950 sm:text-2xl">{justBooked && active ? "Appointment confirmed" : a.status === "CANCELLED" ? "Appointment cancelled" : "Appointment details"}</h1>
+        <p className="mt-1 text-xs leading-5 text-slate-500">{justBooked && active ? `You’re booked, ${user?.firstName ?? "there"}. Your booking is saved. Here are the details for your appointment.` : "Your appointment information and booking reference."}</p>
+      </header>
+
+      <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+        <div className="flex items-start justify-between gap-3 bg-slate-50 px-4 py-3">
+          <div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{a.service}</p><p className="mt-0.5 truncate text-xs text-slate-500">{a.providerName}</p></div>
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ${active ? "bg-sky-50 text-sky-700" : a.status === "CANCELLED" ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-600"}`}>{a.status.toLowerCase().replaceAll("_", " ")}</span>
+        </div>
+        <dl className="grid gap-x-5 gap-y-4 p-4 sm:grid-cols-2">{details.map(({ label, value, icon: Icon }) => <div key={label} className="flex min-w-0 gap-2.5">{Icon && <Icon className="mt-0.5 size-3.5 shrink-0 text-slate-400" />}<div className="min-w-0"><dt className="text-[10px] text-slate-500">{label}</dt><dd className="mt-0.5 break-words text-xs font-semibold text-slate-900">{value}</dd></div></div>)}
+          <div className="flex min-w-0 gap-2.5"><CalendarDays className="mt-0.5 size-3.5 shrink-0 text-slate-400"/><div><dt className="text-[10px] text-slate-500">Duration</dt><dd className="mt-0.5 text-xs font-semibold text-slate-900">{a.durationMinutes} minutes</dd></div></div>
+          <div className="min-w-0 sm:col-span-2"><dt className="text-[10px] text-slate-500">Reference</dt><dd className="mt-0.5 break-all text-xs font-semibold text-slate-900">{a.id}</dd></div>
+          {a.customerNotes && <div className="min-w-0 sm:col-span-2"><dt className="text-[10px] text-slate-500">Your notes</dt><dd className="mt-0.5 break-words text-xs text-slate-700">{a.customerNotes}</dd></div>}
+        </dl>
+      </div>
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
+        <Button asChild size="sm"><Link to="/dashboard/customer/appointments">My appointments</Link></Button>
+        {active && <Button size="sm" variant="outline" onClick={() => calendarFile(a)}><CalendarDays className="mr-1.5" />Add to calendar</Button>}
+        <Button asChild size="sm" variant="outline"><Link to="/dashboard/customer/book">Book another</Link></Button>
+      </div>
     </section>
-    <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="font-semibold">Before your appointment</h2><p className="mt-2 text-sm leading-6 text-slate-600">Changes must be requested at least {a.cancellationCutoffHours} hours before your appointment. Change deadline: {formatSast(a.changeDeadline)}.</p><p className="mt-2 text-sm text-slate-600">Online cancellation and rescheduling are being connected in S2. For now, contact your provider{a.phone ? ` on ${a.phone}` : " directly"}.</p></section>
-    <div className="flex flex-wrap gap-3">{active && <Button onClick={() => calendarFile(a)}>Add to calendar</Button>}
-      <Link className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold" to="/dashboard/customer/appointments">My appointments</Link>
-      <Link className="rounded-lg border bg-white px-4 py-2 text-sm font-semibold" to="/dashboard/customer/book">Find another service</Link></div>
+    {active && <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="font-semibold">Before your appointment</h2><p className="mt-2 text-sm leading-6 text-slate-600">Online changes may be available until {formatSast(a.changeDeadline)} ({a.cancellationCutoffHours} hours before your appointment).{a.phone ? ` Contact your provider on ${a.phone} if you need help.` : " Contact your provider if you need help."}</p></section>}
   </div>;
 }

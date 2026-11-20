@@ -44,12 +44,32 @@ export function createAppointment(input: {
 }
 
 
+export type AppointmentEvent = {
+  id: string; type: string; actor: string; createdAt: string; reason: string | null;
+  oldScheduledStart: string | null; newScheduledStart: string;
+};
+
 export type SavedAppointment = {
   id: string; time: string; endsAt: string | null; service: string; durationMinutes: number;
   price: string | null; status: string; timeZone: string; customerNotes: string | null;
   providerName: string; providerId: string | null; staffName: string | null;
   address: string | null; phone: string | null; cancellationCutoffHours: number; changeDeadline: string;
+  canCancel: boolean; canReschedule: boolean; changeBlockReason: string | null; events: AppointmentEvent[];
 };
 export function fetchAppointment(id: string) {
   return apiFetch<{ success: boolean; appointment: SavedAppointment }>(`/customer/appointments/${encodeURIComponent(id)}`);
+}
+
+export function fetchRescheduleOptions(id: string, date: string) {
+  return apiFetch<{ success: boolean; timeZone: string; slots: BookingSlot[] }>(
+    `/customer/appointments/${encodeURIComponent(id)}/reschedule-options?${new URLSearchParams({ date })}`,
+  );
+}
+
+export function updateAppointment(id: string, change: { startsAt: string } | { reason?: string }) {
+  const action = "startsAt" in change ? "reschedule" : "cancel";
+  return apiFetch<{ success: boolean; appointment: SavedAppointment }>(
+    `/customer/appointments/${encodeURIComponent(id)}/${action}`,
+    { method: "PATCH", body: JSON.stringify(change) },
+  );
 }

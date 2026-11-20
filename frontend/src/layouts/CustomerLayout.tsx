@@ -3,8 +3,8 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 const navItems = [
-  { to: "/dashboard/customer", label: "Overview", icon: "⌂", end: true },
-  { to: "/dashboard/customer/book", label: "Find a service", icon: "＋" },
+  { to: "/dashboard/customer", label: "Dashboard", icon: "⌂", end: true },
+  { to: "/dashboard/customer/book", label: "Book a service", icon: "＋" },
   { to: "/dashboard/customer/appointments", label: "My appointments", icon: "▣" },
   { to: "/dashboard/customer/profile", label: "My profile", icon: "◈" },
 ];
@@ -36,7 +36,8 @@ export default function CustomerLayout() {
           </NavLink>)}
         </nav>
         <div className="border-t border-white/10 p-4">
-          <button type="button" onClick={() => void logout()} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-slate-400 hover:bg-red-500/10 hover:text-red-300"><span aria-hidden="true">↪</span>Sign out</button>
+          <button type="button" onClick={() => void logout()} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-slate-400 hover:bg-red-500/10 hover:text-red-300"><span aria-hidden="true">↪</span>Logout
+          </button>
         </div>
       </aside>
 

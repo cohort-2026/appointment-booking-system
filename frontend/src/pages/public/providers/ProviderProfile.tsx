@@ -17,7 +17,7 @@ export default function ProviderProfile({ dashboard = false }: { dashboard?: boo
       .catch(reason => { if (active) setResult({ id, provider: null, error: reason instanceof Error ? reason.message : "Unable to load provider" }); });
     return () => { active = false; };
   }, [id, reload]);
-  const back = <Link className="text-sm font-semibold text-sky-700 hover:underline" to={dashboard ? "/dashboard/customer/book" : "/providers"}>← Back to providers</Link>;
+  const back = <Link className="text-sm font-semibold text-sky-700 hover:underline" to={dashboard ? "/dashboard/customer/book" : "/providers"}>← Back</Link>;
   const provider = result.id === id ? result.provider : null;
   return <div className={dashboard ? "space-y-6" : "mx-auto max-w-6xl space-y-7 px-4 py-8 sm:px-6"}>
     {back}
