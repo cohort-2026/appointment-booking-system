@@ -1,3 +1,4 @@
+import { MIN_RECOVERY_MINUTES } from "../lib/booking-buffer.js";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
@@ -134,6 +135,7 @@ export const createProviderServicePhase1 = async (req: AuthenticatedRequest, res
       data: {
         name: parsed.data.name!,
         durationMinutes: parsed.data.durationMinutes!,
+          bufferAfterMinutes: parsed.data.bufferAfterMinutes ?? MIN_RECOVERY_MINUTES,
         ...(parsed.data.description !== undefined ? { description: parsed.data.description } : {}),
         ...(parsed.data.expectedPrice !== undefined ? { expectedPrice: parsed.data.expectedPrice } : {}),
         ...(parsed.data.active !== undefined ? { active: parsed.data.active } : {}),

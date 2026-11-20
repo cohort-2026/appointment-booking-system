@@ -1,9 +1,14 @@
+import {
+  changeCustomerAppointment, customerAppointmentDetails, findCustomerAppointment, getReplacementOptions,
+} from "../services/customer-appointment.service.js";
+import { bookingDate, parseBookingDate, DAY_MS } from "../lib/time.js";
+import { bookedDurationMinutes, bookedPrice } from "../lib/booking-snapshot.js";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
-import { BookingError, resolveBookingAvailability } from "../services/booking.service.js";
-import { timeRangesOverlap } from "../services/availability.service.js";
-import { notifyAppointmentCreated } from "../services/appointment-notification.service.js";
+import { BookingError, createBooking } from "../services/booking.service.js";
+
+import { notifyAppointmentCreated, notifyCustomerAppointmentChanged } from "../services/appointment-notification.service.js";
 
 export const getCustomerDashboard = async (
   req: AuthenticatedRequest,
@@ -18,10 +23,8 @@ export const getCustomerDashboard = async (
     }
 
     const now = new Date();
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
-    const startOfTomorrow = new Date(startOfToday);
-    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+    const startOfToday = parseBookingDate(bookingDate(now))!;
+    const startOfTomorrow = new Date(startOfToday.getTime() + DAY_MS);
 
     const [stats, upcomingAppointments] = await Promise.all([
       prisma.appointment.groupBy({
@@ -81,8 +84,8 @@ export const getCustomerDashboard = async (
           ? `${appointment.staff.user.firstName}${appointment.staff.user.lastName ? ` ${appointment.staff.user.lastName}` : ""}`
           : null,
         staffTitle: appointment.staff?.title ?? null,
-        durationMinutes: appointment.service.durationMinutes,
-        price: appointment.service.expectedPrice?.toString() ?? null,
+        durationMinutes: bookedDurationMinutes(appointment),
+        price: bookedPrice(appointment)?.toString() ?? null,
         status: appointment.status,
       })),
     });
@@ -143,8 +146,8 @@ export const getCustomerAppointments = async (req: AuthenticatedRequest, res: Re
         ? `${a.staff.user.firstName}${a.staff.user.lastName ? ` ${a.staff.user.lastName}` : ""}`
         : null,
       staffTitle: a.staff?.title ?? null,
-      durationMinutes: a.service.durationMinutes,
-      price: a.service.expectedPrice?.toString() ?? null,
+      durationMinutes: bookedDurationMinutes(a),
+      price: bookedPrice(a)?.toString() ?? null,
       status: a.status,
     });
 
@@ -176,75 +179,22 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
     return res.status(400).json({ success: false, message: "Choose a valid provider for this appointment" });
   }
 
+  if (body.customerNotes !== undefined && body.customerNotes !== null &&
+      (typeof body.customerNotes !== "string" || Array.from(body.customerNotes).length > 500)) {
+    return res.status(400).json({ success: false, message: "Notes must be text of at most 500 characters" });
+  }
+  const customerNotes = typeof body.customerNotes === "string" ? body.customerNotes.trim() || null : null;
   const startsAt = new Date(startsAtValue);
   if (!Number.isFinite(startsAt.getTime())) {
     return res.status(400).json({ success: false, message: "Choose a valid appointment time" });
   }
-  const date = `${startsAt.getFullYear()}-${String(startsAt.getMonth() + 1).padStart(2, "0")}-${String(startsAt.getDate()).padStart(2, "0")}`;
+  if (!/(Z|[+-]\d{2}:\d{2})$/i.test(startsAtValue)) {
+    return res.status(400).json({ success: false, message: "Appointment time must include a timezone offset" });
+  }
 
   try {
-    const appointment = await prisma.$transaction(async (transaction) => {
-      const availability = await resolveBookingAvailability(transaction, {
-        providerKind,
-        providerId: id,
-        serviceId,
-        date,
-        ...(staffId ? { staffId } : {}),
-      });
-      const slot = availability.slots.find((candidate) => new Date(candidate.startsAt).getTime() === startsAt.getTime());
-      if (!slot || slot.status !== "AVAILABLE") {
-        throw new BookingError("That time is no longer available. Choose another slot.", 409);
-      }
-
-      const requestedEnd = new Date(startsAt.getTime() + availability.service.durationMinutes * 60_000);
-      const existingAppointments = await transaction.appointment.findMany({
-        where: {
-          customerId: req.user!.userId,
-          status: { in: ["CONFIRMED", "RESCHEDULED"] },
-          scheduledStart: {
-            gte: new Date(startsAt.getTime() - 24 * 60 * 60 * 1000),
-            lt: requestedEnd,
-          },
-        },
-        include: { service: { select: { durationMinutes: true } } },
-      });
-      const hasOverlappingCustomerBooking = existingAppointments.some((existing) =>
-        timeRangesOverlap(
-          startsAt,
-          availability.service.durationMinutes,
-          existing.scheduledStart,
-          existing.service.durationMinutes,
-        ),
-      );
-      if (hasOverlappingCustomerBooking) {
-        throw new BookingError(
-          "You already have another active booking during this time. Please choose another time.",
-          409,
-        );
-      }
-
-      return transaction.appointment.create({
-        data: {
-          customerId: req.user!.userId,
-          serviceId,
-          scheduledStart: startsAt,
-          ...(providerKind === "sole"
-            ? { soleProviderId: id }
-            : { businessId: id, staffId: staffId! }),
-        },
-        include: {
-          service: { select: { name: true, durationMinutes: true } },
-          customer: { select: { firstName: true, email: true } },
-          staff: { select: { user: { select: { firstName: true, lastName: true } } } },
-          soleProvider: { select: { displayName: true } },
-          business: { select: { name: true } },
-        },
-      });
-    }, {
-      isolationLevel: "Serializable",
-      maxWait: 15_000,
-      timeout: 20_000,
-    });
+    const appointment = await createBooking({ customerId: req.user!.userId, providerKind,
+      providerId: id, serviceId, startsAt, customerNotes, ...(staffId ? { staffId } : {}) });
 
     await notifyAppointmentCreated(appointment);
 
@@ -253,7 +203,7 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
       appointment: {
         id: appointment.id,
         service: appointment.service.name,
-        durationMinutes: appointment.service.durationMinutes,
+        durationMinutes: bookedDurationMinutes(appointment),
         startsAt: appointment.scheduledStart,
         status: appointment.status,
       },
@@ -270,5 +220,69 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
     }
     console.error("Customer appointment creation error:", error);
     return res.status(500).json({ success: false, message: "Unable to create appointment" });
+  }
+};
+
+
+function appointmentOwner(req: AuthenticatedRequest) {
+  return { id: typeof req.params.id === "string" ? req.params.id : "", customerId: req.user!.userId };
+}
+
+function appointmentError(res: Response, error: unknown) {
+  if (error instanceof BookingError) {
+    return res.status(error.status).json({ success: false, message: error.message });
+  }
+  if (error && typeof error === "object" && "code" in error && error.code === "P2028") {
+    return res.status(503).json({ success: false, message: "The booking service is busy. Please try again." });
+  }
+  console.error("Customer appointment request failed");
+  return res.status(500).json({ success: false, message: "Unable to complete the appointment request" });
+}
+
+export const getCustomerAppointment = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const appointment = await findCustomerAppointment(appointmentOwner(req));
+    return res.json({ success: true, appointment: customerAppointmentDetails(appointment) });
+  } catch (error) {
+    return appointmentError(res, error);
+  }
+};
+
+export const getCustomerRescheduleOptions = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const options = await getReplacementOptions(appointmentOwner(req), typeof req.query.date === "string" ? req.query.date : "");
+    return res.json({ success: true, ...options });
+  } catch (error) {
+    return appointmentError(res, error);
+  }
+};
+
+export const cancelCustomerAppointment = async (req: AuthenticatedRequest, res: Response) => {
+  const reason: unknown = req.body?.reason;
+  if (reason !== undefined && (typeof reason !== "string" || Array.from(reason).length > 500)) {
+    return res.status(400).json({ success: false, message: "The reason must be text of at most 500 characters" });
+  }
+  try {
+    const { appointment, previousStart } = await changeCustomerAppointment(appointmentOwner(req), {
+      action: "cancel", reason: typeof reason === "string" ? reason.trim() || null : null,
+    });
+    void notifyCustomerAppointmentChanged(appointment, "CANCELLED", previousStart);
+    return res.json({ success: true, appointment: customerAppointmentDetails(appointment) });
+  } catch (error) {
+    return appointmentError(res, error);
+  }
+};
+
+export const rescheduleCustomerAppointment = async (req: AuthenticatedRequest, res: Response) => {
+  const value: unknown = req.body?.startsAt;
+  if (typeof value !== "string" || !/(Z|[+-]\d{2}:\d{2})$/i.test(value) || !Number.isFinite(Date.parse(value))) {
+    return res.status(400).json({ success: false, message: "Choose a valid appointment time with a timezone offset" });
+  }
+  try {
+    const { appointment, previousStart } = await changeCustomerAppointment(appointmentOwner(req), { action: "reschedule", startsAt: new Date(value) });
+    void notifyCustomerAppointmentChanged(appointment, "RESCHEDULED", previousStart);
+    return res.json({ success: true, appointment: customerAppointmentDetails(appointment) });
+  } catch (error) {
+    return appointmentError(res, error);
   }
 };

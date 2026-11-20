@@ -1,3 +1,4 @@
+import { bookedDurationMinutes } from "../lib/booking-snapshot.js";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
@@ -21,6 +22,7 @@ async function getCurrentStaff(userId: string) {
 function appointmentSummary(appointment: {
   id: string;
   scheduledStart: Date;
+  scheduledEnd: Date | null;
   status: string;
   customer: { firstName: string; lastName: string | null };
   service: { name: string; durationMinutes: number };
@@ -31,7 +33,7 @@ function appointmentSummary(appointment: {
     status: appointment.status,
     customerName: `${appointment.customer.firstName} ${appointment.customer.lastName ?? ""}`.trim(),
     service: appointment.service.name,
-    durationMinutes: appointment.service.durationMinutes,
+    durationMinutes: bookedDurationMinutes(appointment),
   };
 }
 

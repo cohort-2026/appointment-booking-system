@@ -4,7 +4,6 @@ import toast from "react-hot-toast";
 import { useAuth } from "../../hooks/useAuth";
 import { getVerificationEmail } from "../../services/auth";
 import { postLoginDestination, safeCustomerReturnPath } from "../../lib/bookingFlow";
-import { bookingDraftPath, readBookingDraft } from "../../lib/bookingDraft";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -12,8 +11,6 @@ export default function Login() {
   const { login, user, loading: authLoading } = useAuth();
   const requestedReturnTo = new URLSearchParams(location.search).get("returnTo");
   const safeReturnTo = safeCustomerReturnPath(requestedReturnTo);
-  const draft = readBookingDraft();
-  const authReturnTo = safeReturnTo ?? (draft ? bookingDraftPath(draft) : null);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,7 +43,7 @@ export default function Login() {
             : "We couldn't send your code. You can retry from the verification page.",
         );
         navigate("/verify-email", {
-          state: { email: unverifiedEmail, emailSent, ...(authReturnTo ? { returnTo: authReturnTo } : {}) },
+          state: { email: unverifiedEmail, emailSent, ...(safeReturnTo ? { returnTo: safeReturnTo } : {}) },
         });
         return;
       }
@@ -230,7 +227,7 @@ export default function Login() {
                 <p className="text-sm text-slate-500">
                   Don't have an account?{" "}
                   <Link
-                    to={authReturnTo ? `/register/customer?returnTo=${encodeURIComponent(authReturnTo)}` : "/register"}
+                    to={safeReturnTo ? `/register/customer?returnTo=${encodeURIComponent(safeReturnTo)}` : "/register"}
                     className="font-semibold text-[#0EA5E9] hover:text-sky-700"
                   >
                     Get started

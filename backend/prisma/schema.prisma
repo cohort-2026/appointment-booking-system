@@ -8,66 +8,71 @@ datasource db {
 }
 
 model User {
-  id              String         @id @default(uuid())
-  email           String         @unique
-  passwordHash    String
-  firstName       String
-  lastName        String?
-  phone           String?        @unique
-  role            UserRole       @default(CUSTOMER)
-  termsAcceptedAt DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  isVerified      Boolean        @default(false)
-  otpCode         String?
-  otpExpiresAt    DateTime?
-  otpAttempts     Int            @default(0)
-  passwordResetCode         String?
-  passwordResetExpiresAt    DateTime?
-  passwordResetAttempts     Int            @default(0)
-  appointments    Appointment[]
-  business        Business?
-  businessStaff   BusinessStaff?
-  soleProvider    SoleProvider?
+  id                     String             @id @default(uuid())
+  email                  String             @unique
+  passwordHash           String
+  firstName              String
+  lastName               String?
+  phone                  String?            @unique
+  role                   UserRole           @default(CUSTOMER)
+  termsAcceptedAt        DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  isVerified             Boolean            @default(false)
+  otpCode                String?
+  otpExpiresAt           DateTime?
+  otpAttempts            Int                @default(0)
+  passwordResetCode      String?
+  passwordResetExpiresAt DateTime?
+  passwordResetAttempts  Int                @default(0)
+  appointments           Appointment[]
+  business               Business?
+  businessStaff          BusinessStaff?
+  soleProvider           SoleProvider?
+  appointmentEvents      AppointmentEvent[]
 }
 
 model SoleProvider {
-  id            String                 @id @default(uuid())
-  userId        String                 @unique
-  displayName   String
-  serviceName   String?
-  category      String?
-  experience    String?
-  bio           String?
-  city          String?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  appointments  Appointment[]
-  availability  Availability[]
-  subscriptions ProviderSubscription[]
-  services      Service[]
-  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timeZone                String                 @default("Africa/Johannesburg")
+  cancellationCutoffHours Int                    @default(24)
+  id                      String                 @id @default(uuid())
+  userId                  String                 @unique
+  displayName             String
+  serviceName             String?
+  category                String?
+  experience              String?
+  bio                     String?
+  city                    String?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  appointments            Appointment[]
+  availability            Availability[]
+  subscriptions           ProviderSubscription[]
+  services                Service[]
+  user                    User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Business {
-  id            String                 @id @default(uuid())
-  ownerUserId   String                 @unique
-  name          String
-  category      String?
-  staffSize     String?
-  email         String?
-  phone         String?                @unique
-  address       String?
-  description   String?
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
-  appointments  Appointment[]
-  availability   BusinessAvailability[]
-  owner         User                   @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  staff         BusinessStaff[]
-  staffInvitations StaffInvitation[]
-  subscriptions ProviderSubscription[]
-  services      Service[]
+  timeZone                String                 @default("Africa/Johannesburg")
+  cancellationCutoffHours Int                    @default(24)
+  id                      String                 @id @default(uuid())
+  ownerUserId             String                 @unique
+  name                    String
+  category                String?
+  staffSize               String?
+  email                   String?
+  phone                   String?                @unique
+  address                 String?
+  description             String?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  appointments            Appointment[]
+  availability            BusinessAvailability[]
+  owner                   User                   @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  staff                   BusinessStaff[]
+  staffInvitations        StaffInvitation[]
+  subscriptions           ProviderSubscription[]
+  services                Service[]
 }
 
 model BusinessStaff {
@@ -112,7 +117,7 @@ model StaffInvitation {
   expiresAt  DateTime
   acceptedAt DateTime?
   createdAt  DateTime  @default(now())
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, acceptedAt, expiresAt])
   @@index([email])
@@ -175,20 +180,21 @@ model SubscriptionPayment {
 }
 
 model Service {
-  id               String         @id @default(uuid())
-  soleProviderId   String?
-  businessId       String?
-  name             String
-  description      String?
-  durationMinutes  Int
-  expectedPrice    Decimal?       @db.Decimal(10, 2)
-  active           Boolean        @default(true)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  appointments     Appointment[]
-  business         Business?      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  soleProvider     SoleProvider?  @relation(fields: [soleProviderId], references: [id], onDelete: Cascade)
-  staffAssignments StaffService[]
+  id                 String         @id @default(uuid())
+  soleProviderId     String?
+  businessId         String?
+  name               String
+  description        String?
+  bufferAfterMinutes Int            @default(15)
+  durationMinutes    Int
+  expectedPrice      Decimal?       @db.Decimal(10, 2)
+  active             Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  appointments       Appointment[]
+  business           Business?      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  soleProvider       SoleProvider?  @relation(fields: [soleProviderId], references: [id], onDelete: Cascade)
+  staffAssignments   StaffService[]
 
   @@index([soleProviderId])
   @@index([businessId])
@@ -225,37 +231,132 @@ model Availability {
 }
 
 model Appointment {
-  id             String            @id @default(uuid())
-  customerId     String
-  serviceId      String
-  soleProviderId String?
-  staffId        String?
-  businessId     String?
-  scheduledStart DateTime
-  status         AppointmentStatus @default(CONFIRMED)
-  noShow         Boolean           @default(false)
-  lateArrival    Boolean           @default(false)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  business       Business?         @relation(fields: [businessId], references: [id])
-  customer       User              @relation(fields: [customerId], references: [id])
-  service        Service           @relation(fields: [serviceId], references: [id])
-  soleProvider   SoleProvider?     @relation(fields: [soleProviderId], references: [id])
-  staff          BusinessStaff?    @relation(fields: [staffId], references: [id])
+  id                          String             @id @default(uuid())
+  customerId                  String
+  serviceId                   String
+  soleProviderId              String?
+  staffId                     String?
+  businessId                  String?
+  scheduledStart              DateTime
+  /// Nullable during the rolling deployment; new writers must always populate it.
+  scheduledEnd                DateTime?
+  /// Historical backfill uses current service price; unknown price remains null.
+  priceAtBooking              Decimal?           @db.Decimal(10, 2)
+  bufferAfterMinutesAtBooking Int                @default(15)
+  cancelledAt                 DateTime?
+  cancelledBy                 AppointmentActor?
+  cancellationReason          String?            @db.VarChar(500)
+  rescheduleCount             Int                @default(0)
+  customerNotes               String?            @db.VarChar(500)
+  manageTokenHash             String?            @unique @db.VarChar(64)
+  reminderSentAt              DateTime?
+  events                      AppointmentEvent[]
+  outboxMessages              OutboxMessage[]
+  status                      AppointmentStatus  @default(CONFIRMED)
+  noShow                      Boolean            @default(false)
+  lateArrival                 Boolean            @default(false)
+  createdAt                   DateTime           @default(now())
+  updatedAt                   DateTime           @updatedAt
+  business                    Business?          @relation(fields: [businessId], references: [id])
+  customer                    User               @relation(fields: [customerId], references: [id])
+  service                     Service            @relation(fields: [serviceId], references: [id])
+  soleProvider                SoleProvider?      @relation(fields: [soleProviderId], references: [id])
+  staff                       BusinessStaff?     @relation(fields: [staffId], references: [id])
 
   @@index([customerId])
   @@index([serviceId])
   @@index([soleProviderId])
   @@index([staffId])
   @@index([businessId])
+  @@index([staffId, status, scheduledStart])
+  @@index([soleProviderId, status, scheduledStart])
+  @@index([customerId, scheduledStart])
   @@index([scheduledStart])
   @@index([status])
 }
 
-model playing_with_neon {
-  id    Int    @id @default(autoincrement())
-  name  String
-  value Float? @db.Real
+/// Append-only audit history. Lifecycle code writes the change and event in one transaction.
+model AppointmentEvent {
+  id                String               @id @default(uuid())
+  appointmentId     String
+  type              AppointmentEventType
+  actor             AppointmentActor
+  actorUserId       String?
+  createdAt         DateTime             @default(now())
+  oldStatus         AppointmentStatus?
+  newStatus         AppointmentStatus
+  oldScheduledStart DateTime?
+  newScheduledStart DateTime
+  oldScheduledEnd   DateTime?
+  newScheduledEnd   DateTime?
+  reason            String?              @db.VarChar(500)
+  appointment       Appointment          @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  actorUser         User?                @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  outboxMessages    OutboxMessage[]
+
+  @@index([appointmentId, createdAt, id])
+  @@index([actorUserId])
+}
+
+/// Durable delivery intent; no raw management token or rendered email body is stored.
+model OutboxMessage {
+  id                 String              @id @default(uuid())
+  appointmentId      String
+  appointmentEventId String?
+  kind               OutboxMessageKind
+  recipient          String
+  deduplicationKey   String              @unique
+  status             OutboxMessageStatus @default(PENDING)
+  attempts           Int                 @default(0)
+  availableAt        DateTime            @default(now())
+  lockedAt           DateTime?
+  lockToken          String?
+  sentAt             DateTime?
+  providerMessageId  String?
+  /// Sanitized error summary only; never URLs, credentials or tokens.
+  lastError          String?             @db.VarChar(1000)
+  /// Captures the schedule revision for reminder deduplication and stale-work checks.
+  scheduledStart     DateTime
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  appointment        Appointment         @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  appointmentEvent   AppointmentEvent?   @relation(fields: [appointmentEventId], references: [id], onDelete: Restrict)
+
+  @@index([status, availableAt])
+  @@index([appointmentId, createdAt])
+  @@index([appointmentEventId])
+}
+
+enum AppointmentActor {
+  CUSTOMER
+  STAFF
+  OWNER
+  PROVIDER
+  SYSTEM
+}
+
+enum AppointmentEventType {
+  CREATED
+  CANCELLED
+  RESCHEDULED
+  COMPLETED
+  NO_SHOW
+}
+
+enum OutboxMessageKind {
+  CONFIRMATION
+  BOOKING_ALERT
+  CANCELLATION
+  RESCHEDULE
+  REMINDER
+}
+
+enum OutboxMessageStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  SKIPPED
 }
 
 enum UserRole {
