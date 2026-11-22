@@ -26,7 +26,7 @@ export const getCustomerDashboard = async (
     const startOfToday = parseBookingDate(bookingDate(now))!;
     const startOfTomorrow = new Date(startOfToday.getTime() + DAY_MS);
 
-    const [stats, upcomingAppointments] = await Promise.all([
+    const [stats, upcomingAppointments, upcomingCount] = await Promise.all([
       prisma.appointment.groupBy({
         by: ["status"],
         where: { customerId: req.user.userId },
@@ -52,6 +52,9 @@ export const getCustomerDashboard = async (
           },
         },
       }),
+      prisma.appointment.count({
+        where: { customerId: req.user.userId, scheduledStart: { gte: now }, status: { in: ["CONFIRMED", "RESCHEDULED"] } },
+      }),
     ]);
 
     const countByStatus = Object.fromEntries(
@@ -61,12 +64,11 @@ export const getCustomerDashboard = async (
     return res.status(200).json({
       success: true,
       stats: {
-        upcomingAppointments:
-          (countByStatus.CONFIRMED ?? 0) + (countByStatus.RESCHEDULED ?? 0),
+        upcomingAppointments: upcomingCount,
         todayAppointments: await prisma.appointment.count({
           where: {
             customerId: req.user.userId,
-            scheduledStart: { gte: startOfToday, lt: startOfTomorrow },
+            status: { not: "CANCELLED" }, scheduledStart: { gte: startOfToday, lt: startOfTomorrow },
           },
         }),
         completedAppointments: countByStatus.COMPLETED ?? 0,

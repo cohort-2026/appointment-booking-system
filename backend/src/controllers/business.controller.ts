@@ -1,3 +1,4 @@
+import { bookingDate, bookingMonthBounds, DAY_MS, parseBookingDate } from "../lib/time.js";
 import { MIN_RECOVERY_MINUTES } from "../lib/booking-buffer.js";
 import { bookedDurationMinutes, bookedPrice } from "../lib/booking-snapshot.js";
 import type { Response } from "express";
@@ -393,10 +394,8 @@ export const getBusinessStaff = async (req: AuthenticatedRequest, res: Response)
     }
 
     const now = new Date();
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
-    const startOfTomorrow = new Date(startOfToday);
-    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+    const startOfToday = parseBookingDate(bookingDate(now))!;
+    const startOfTomorrow = new Date(+startOfToday + DAY_MS);
     const [staffMembers, invitations, activeSubscription] = await Promise.all([
       prisma.businessStaff.findMany({
         where: { businessId: business.id },
@@ -404,7 +403,7 @@ export const getBusinessStaff = async (req: AuthenticatedRequest, res: Response)
           user: { select: { firstName: true, lastName: true, email: true, phone: true } },
           services: { include: { service: { select: { name: true } } } },
           appointments: {
-            where: { scheduledStart: { gte: startOfToday, lt: startOfTomorrow } },
+            where: { status: { not: "CANCELLED" }, scheduledStart: { gte: startOfToday, lt: startOfTomorrow } },
             select: { id: true },
           },
         },
@@ -633,73 +632,6 @@ export const getBusinessAppointments = async (req: AuthenticatedRequest, res: Re
   }
 };
 
-export const updateBusinessAppointmentStatus = async (req: AuthenticatedRequest, res: Response) => {
-  const { status } = req.body as { status?: unknown };
-  if (status !== "COMPLETED" && status !== "NO_SHOW" && status !== "CANCELLED") {
-    return res.status(400).json({ success: false, message: "Invalid appointment status" });
-  }
-
-  const appointmentId = typeof req.params.id === "string" ? req.params.id : "";
-  if (!appointmentId) {
-    return res.status(400).json({ success: false, message: "Invalid appointment ID" });
-  }
-
-  try {
-    const business = await prisma.business.findUnique({
-      where: { ownerUserId: req.user!.userId },
-      select: { id: true },
-    });
-    if (!business) {
-      return res.status(404).json({ success: false, message: "Business profile not found" });
-    }
-
-    const now = new Date();
-    if (status === "NO_SHOW") {
-      const appointment = await prisma.appointment.findFirst({
-        where: {
-          id: appointmentId,
-          businessId: business.id,
-          status: { in: ["CONFIRMED", "RESCHEDULED"] },
-        },
-        select: { scheduledStart: true },
-      });
-      if (appointment && appointment.scheduledStart > now) {
-        return res.status(400).json({ success: false, message: "No-show can only be recorded after the appointment time" });
-      }
-    }
-    if (status === "CANCELLED") {
-      const appointment = await prisma.appointment.findFirst({
-        where: {
-          id: appointmentId,
-          businessId: business.id,
-          status: { in: ["CONFIRMED", "RESCHEDULED"] },
-        },
-        select: { scheduledStart: true },
-      });
-      if (appointment && appointment.scheduledStart <= now) {
-        return res.status(400).json({ success: false, message: "Only future appointments can be cancelled" });
-      }
-    }
-
-    const updated = await prisma.appointment.updateMany({
-      where: {
-        id: appointmentId,
-        businessId: business.id,
-        status: { in: ["CONFIRMED", "RESCHEDULED"] },
-      },
-      data: { status },
-    });
-    if (updated.count === 0) {
-      return res.status(404).json({ success: false, message: "Upcoming business appointment not found" });
-    }
-
-    return res.status(200).json({ success: true });
-  } catch (error) {
-    console.error("Business appointment status update error:", error);
-    return res.status(500).json({ success: false, message: "Unable to update appointment status" });
-  }
-};
-
 export const getBusinessDashboard = async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) {
@@ -715,12 +647,9 @@ export const getBusinessDashboard = async (req: AuthenticatedRequest, res: Respo
     }
 
     const now = new Date();
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
-    const startOfTomorrow = new Date(startOfToday);
-    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const startOfToday = parseBookingDate(bookingDate(now))!;
+    const startOfTomorrow = new Date(+startOfToday + DAY_MS);
+    const { start: startOfMonth, end: startOfNextMonth } = bookingMonthBounds(now);
 
     const [
       todayAppointments,
@@ -733,13 +662,13 @@ export const getBusinessDashboard = async (req: AuthenticatedRequest, res: Respo
       activeSubscription,
     ] = await Promise.all([
       prisma.appointment.count({
-        where: { businessId: business.id, scheduledStart: { gte: startOfToday, lt: startOfTomorrow } },
+        where: { businessId: business.id, status: { not: "CANCELLED" }, scheduledStart: { gte: startOfToday, lt: startOfTomorrow } },
       }),
       prisma.appointment.count({
         where: {
           businessId: business.id,
           scheduledStart: { gte: now, lt: startOfTomorrow },
-          status: "CONFIRMED",
+          status: { in: ["CONFIRMED", "RESCHEDULED"] },
         },
       }),
       prisma.businessStaff.count({ where: { businessId: business.id } }),
@@ -748,7 +677,7 @@ export const getBusinessDashboard = async (req: AuthenticatedRequest, res: Respo
         where: { businessId: business.id, scheduledStart: { gte: startOfMonth, lt: startOfNextMonth } },
       }),
       prisma.appointment.findMany({
-        where: { businessId: business.id, scheduledStart: { gte: startOfToday, lt: startOfTomorrow } },
+        where: { businessId: business.id, status: { not: "CANCELLED" }, scheduledStart: { gte: startOfToday, lt: startOfTomorrow } },
         orderBy: { scheduledStart: "asc" },
         include: {
           customer: { select: { firstName: true, lastName: true } },
@@ -762,7 +691,7 @@ export const getBusinessDashboard = async (req: AuthenticatedRequest, res: Respo
           user: { select: { firstName: true, lastName: true } },
           services: { include: { service: { select: { name: true } } } },
           appointments: {
-            where: { scheduledStart: { gte: startOfToday, lt: startOfTomorrow } },
+            where: { status: { not: "CANCELLED" }, scheduledStart: { gte: startOfToday, lt: startOfTomorrow } },
             select: {
               id: true,
               scheduledStart: true,

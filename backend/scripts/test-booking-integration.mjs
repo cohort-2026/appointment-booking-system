@@ -12,6 +12,8 @@ const admin=new pg.Pool({connectionString:connection});
 await admin.query(`CREATE DATABASE "${name}"`);
 const url=new URL(connection); url.pathname=`/${name}`;
 process.env.DATABASE_URL=url.toString(); process.env.JWT_SECRET='local-test-secret';
+delete process.env.RESEND_API_KEY;
+process.env.CRON_SECRET='local-cron-test';
 const sql=new pg.Pool({connectionString:url.toString()});
 let prisma,server; let checks=0;
 async function check(label,run){await run();checks++;console.log(`PASS ${label}`);}
@@ -38,7 +40,7 @@ try {
   const business={customerId:'c1',providerKind:'business',providerId:'biz',serviceId:'business-service',staffId:'worker',startsAt:start};
   const sole={customerId:'c1',providerKind:'sole',providerId:'sole',serviceId:'sole-service',startsAt:start};
   const available={providerKind:'business',providerId:'biz',serviceId:'business-service',staffId:'worker',date:day};
-  async function clear(){await prisma.appointmentEvent.deleteMany();await prisma.appointment.deleteMany();}
+  async function clear(){await prisma.outboxMessage.deleteMany();await prisma.appointmentEvent.deleteMany();await prisma.appointment.deleteMany();}
   async function race(a,b){
     let arrived=0,release;const gate=new Promise(r=>{release=r;});
     const wrapped={$transaction:(op,options)=>prisma.$transaction(tx=>op(new Proxy(tx,{get(target,key){
@@ -81,6 +83,7 @@ try {
     const next = await createBooking({ ...business, customerId: 'c2', startsAt: recoveryEnd });
     assert.equal(+next.scheduledStart, +recoveryEnd);
     assert.equal(next.bufferAfterMinutesAtBooking, 30);
+    await prisma.outboxMessage.deleteMany({ where: { appointmentId: next.id } });
     await prisma.appointmentEvent.deleteMany({ where: { appointmentId: next.id } });
     await prisma.appointment.delete({ where: { id: next.id } });
     await prisma.appointment.update({ where: { id: booked.id }, data: { bufferAfterMinutesAtBooking: 15 } });
@@ -102,7 +105,11 @@ try {
     await prisma.user.update({where:{id:'worker-user'},data:{isVerified:true}});
   });
   const router=(await import('../src/routes/customer.routes.js')).default;
-  const app=express();app.use(express.json());app.use('/api/customer',router);server=app.listen(0,'127.0.0.1');await once(server,'listening');
+  const app=express();app.use(express.json());app.use('/api/customer',router);
+  for (const role of ['business', 'provider', 'staff']) {
+    app.use(`/api/${role}`, (await import(`../src/routes/${role}.routes.js`)).default);
+  }
+  server=app.listen(0,'127.0.0.1');await once(server,'listening');
   const origin=`http://127.0.0.1:${server.address().port}`;
   const token=id=>jwt.sign({userId:id,role:'CUSTOMER'},process.env.JWT_SECRET);
   await check('saved detail is direct, ownership-checked and excludes internal tokens',async()=>{
@@ -198,6 +205,74 @@ try {
     const detail=await request('c1',`/${source.id}`);
     assert.equal(detail.appointment.events.length,move.status===200?2:1);
   });
+  const api = async (path, { userId, role, method = 'GET', body, authorization } = {}) => {
+    const headers = { 'Content-Type': 'application/json' };
+    if (userId) headers.authorization = `Bearer ${jwt.sign({ userId, role }, process.env.JWT_SECRET)}`;
+    if (authorization) headers.authorization = authorization;
+    return fetch(origin + '/api' + path, { method, headers, body: JSON.stringify(body) });
+  };
+  await check('role-scoped history and terminal transitions enforce timing and record one actor under concurrency', async () => {
+    const owned = { userId: 'owner', role: 'BUSINESS_OWNER' };
+    const provider = { userId: 'sole-user', role: 'SOLE_PROVIDER' };
+    const worker = { userId: 'worker-user', role: 'BUSINESS_STAFF' };
+    const future = await createBooking({ ...business, startsAt: new Date(time(10)) });
+    const update = (path, auth, status, reason) => api(path + '/status', { ...auth, method: 'PATCH', body: { status, reason } });
+    const path = '/business/appointments/' + future.id;
+    assert.equal((await update(path, owned, 'COMPLETED')).status, 422);
+    assert.equal((await update('/staff/appointments/' + future.id, worker, 'NO_SHOW')).status, 422);
+    assert.equal((await api('/provider/appointments/' + future.id + '/events', provider)).status, 404);
+    assert.deepEqual((await (await api(path + '/events', owned)).json()).allowedStatuses, ['CANCELLED']);
+    const [first, second] = await Promise.all([
+      update(path, owned, 'CANCELLED', 'Owner unavailable'),
+      update(path, owned, 'CANCELLED', 'Owner unavailable'),
+    ]);
+    assert.equal([first, second].filter(result => result.ok).length, 1);
+    assert.ok([409, 422].includes([first, second].find(result => !result.ok).status));
+    const saved = await prisma.appointment.findUniqueOrThrow({ where: { id: future.id }, include: { events: true } });
+    assert.equal(saved.cancelledBy, 'OWNER');
+    assert.equal(saved.events.filter(event => event.type === 'CANCELLED').length, 1);
+    assert.equal(saved.events.find(event => event.type === 'CANCELLED').actorUserId, 'owner');
+
+    const past = await prisma.appointment.create({ data: {
+      customerId: 'c1', soleProviderId: 'sole', serviceId: 'sole-service',
+      scheduledStart: new Date(Date.now() - 7_200_000), scheduledEnd: new Date(Date.now() - 3_600_000),
+    } });
+    const solePath = '/provider/appointments/' + past.id;
+    assert.equal((await update(solePath, provider, 'NO_SHOW', 'Did not arrive')).status, 200);
+    assert.equal((await update(solePath, provider, 'COMPLETED')).status, 422);
+    const { events } = await (await api(solePath + '/events', provider)).json();
+    assert.equal(events.length, 1);
+    assert.equal(events[0].actor, 'PROVIDER');
+    assert.equal(events[0].reason, 'Did not arrive');
+    assert.equal(events[0].actorUser.firstName, 'Sole');
+  });
+
+  await check('reminders target the previous Johannesburg calendar day and skip repeat sends', async () => {
+    await clear();
+    const now = new Date('2026-12-31T22:30:00.000Z'); // 1 January, 00:30 SAST.
+    const tomorrow = parseBookingDate('2027-01-02');
+    const { sendTomorrowReminders } = await import('../src/services/appointment-reminders.service.js');
+    const start = new Date(+tomorrow + 9 * 3_600_000);
+    const base = {
+      customerId: 'c1', soleProviderId: 'sole', serviceId: 'sole-service',
+      scheduledStart: start, scheduledEnd: new Date(+start + 3_600_000),
+    };
+    const eligible = await prisma.appointment.create({ data: base });
+    await prisma.appointment.create({ data: { ...base, status: 'CANCELLED' } });
+    await prisma.appointment.create({ data: {
+      ...base, scheduledStart: new Date(+start + DAY_MS),
+      scheduledEnd: new Date(+start + DAY_MS + 3_600_000),
+    } });
+    const sent = [];
+    const send = async message => { sent.push(message); };
+    const outcomes = await Promise.all([sendTomorrowReminders(now, send), sendTomorrowReminders(now, send)]);
+    assert.equal(outcomes.reduce((total, outcome) => total + outcome.accepted, 0), 1);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].startsAt.toISOString(), start.toISOString());
+    assert.ok(sent[0].appointmentUrl.endsWith('/dashboard/customer/appointments/' + eligible.id));
+    assert.equal((await sendTomorrowReminders(now, send)).accepted, 0);
+  });
+
   console.log(`${checks} real PostgreSQL integration checks passed`);
 }finally{
   if(server)await new Promise(r=>server.close(r));if(prisma)await prisma.$disconnect();await sql.end();await admin.query(`DROP DATABASE "${name}"`);await admin.end();

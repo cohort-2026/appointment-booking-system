@@ -138,6 +138,7 @@ describe('shared booking journey',()=>{
 it('authentication return paths support both entry points and reject external redirects',()=>{
   expect(safeCustomerReturnPath('/dashboard/customer/book/business%3Aprovider')).toBe('/dashboard/customer/book/business%3Aprovider');
   expect(safeCustomerReturnPath('/providers/sole%3Aprovider')).toBe('/providers/sole%3Aprovider');
+  expect(safeCustomerReturnPath('/dashboard/customer/appointments/saved')).toBe('/dashboard/customer/appointments/saved');
   for(const path of ['https://evil.invalid','//evil.invalid','/\\evil.invalid','/dashboard/business'])expect(safeCustomerReturnPath(path)).toBeNull();
 });
 it('verified signup uses saved notes and routes only to a persisted confirmation',async()=>{
@@ -157,10 +158,9 @@ it('shows a disabled recovery start and enables the boundary after it', async ()
   await user.click(await screen.findByRole('button', { name: /Consultation/ }));
   await user.click(screen.getByRole('button', { name: 'Choose a time', exact: true }));
   fireEvent.change(screen.getByLabelText('Choose a date'), { target: { value: date } });
-  const recovery = await screen.findByText('Recovery until 11:15');
-  const blockedStart = recovery.closest('button');
-  expect(blockedStart?.textContent).toContain('11:00 SAST');
-  expect(blockedStart?.disabled).toBe(true);
+  const blockedStart = await screen.findByRole<HTMLButtonElement>('button', { name: '11:00 SAST', exact: true });
+  expect(blockedStart.disabled).toBe(true);
+  expect(screen.queryByText(/recovery/i)).toBeNull();
   expect(screen.getByRole<HTMLButtonElement>('button', { name: '11:15 SAST', exact: true }).disabled).toBe(false);
 });
 
@@ -196,7 +196,7 @@ it('books, reopens from My appointments, reschedules after a conflict, and cance
   const history = within(screen.getByRole('region',{name:'Appointment history'}));
   expect(history.getByText('Work conflict')).toBeTruthy();
   expect(history.getByText(/09:00.*→.*09:30/)).toBeTruthy();
-  expect(screen.queryByRole('button',{name:'Reschedule',exact:true})).toBeNull();
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Reschedule', exact: true }).disabled).toBe(true);
   expect(posts).toHaveLength(1);
   cleanup();
   mount('/dashboard/customer/appointments/saved');
@@ -204,11 +204,21 @@ it('books, reopens from My appointments, reschedules after a conflict, and cance
   expect(cancellationReasons).toEqual(['Work conflict']);
 });
 
-it('explains the server cutoff and hides both unavailable actions', async () => {
+it('explains the server cutoff and leaves both unavailable actions visible and disabled', async () => {
   loggedIn = true;
   insideCutoff = true;
   mount('/dashboard/customer/appointments/saved');
   await screen.findByText('The deadline for online changes has passed.');
-  expect(screen.queryByRole('button',{name:'Reschedule',exact:true})).toBeNull();
-  expect(screen.queryByRole('button',{name:'Cancel appointment',exact:true})).toBeNull();
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Reschedule', exact: true }).disabled).toBe(true);
+  const cancel = screen.getByRole<HTMLButtonElement>('button', { name: 'Cancel appointment', exact: true });
+  expect(cancel.disabled).toBe(true);
+  expect(document.getElementById(cancel.getAttribute('aria-describedby') ?? '')?.textContent)
+    .toBe('The deadline for online changes has passed.');
+});
+
+it('sends legacy management links to sign-in without loading a booking', async () => {
+  mount('/manage/legacy-token');
+  await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/login'));
+  expect(details).toBe(0);
+  expect(screen.queryByText('legacy-token')).toBeNull();
 });

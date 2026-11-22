@@ -46,6 +46,7 @@ export function createAppointment(input: {
 
 export type AppointmentEvent = {
   id: string; type: string; actor: string; createdAt: string; reason: string | null;
+  actorUser?: { firstName: string; lastName: string | null } | null;
   oldScheduledStart: string | null; newScheduledStart: string;
 };
 

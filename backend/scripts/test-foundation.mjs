@@ -10,7 +10,8 @@ const migrations = new URL('../prisma/migrations/', import.meta.url);
 const names = (await readdir(migrations)).filter(n => /^\d/.test(n)).sort();
 const foundation = names.filter(n => n.startsWith('20261118'));
 const recovery = names.filter(n => n.endsWith('_minimum_booking_recovery'));
-const baseline = names.filter(n => !foundation.includes(n) && !recovery.includes(n));
+const statusBackfill = names.filter(n => n.endsWith("_backfill_legacy_no_show"));
+const baseline = names.filter(n => !foundation.includes(n) && !recovery.includes(n) && !statusBackfill.includes(n));
 async function apply(db, list) {
   for (const name of list) await db.exec(await readFile(new URL(`${name}/migration.sql`, migrations), 'utf8'));
 }
@@ -94,6 +95,9 @@ test('populated upgrade preserves records, backfills snapshots, and leaves unman
     await assert.rejects(db.exec(`UPDATE "Service" SET "bufferAfterMinutes"=14 WHERE id='priced'`));
     assert.equal((await db.query(`SELECT "scheduledEnd"::text AS ending,"priceAtBooking"::text AS price FROM "Appointment" WHERE id='a'`)).rows[0].ending, '2026-11-19 09:00:00');
     assert.equal((await db.query(`SELECT "priceAtBooking"::text AS price FROM "Appointment" WHERE id='a'`)).rows[0].price, '123.45');
+    await apply(db, statusBackfill);
+    assert.deepEqual((await db.query(`SELECT status::text, "noShow" FROM "Appointment" WHERE id='legacy-no-show'`)).rows[0],
+      { status: 'NO_SHOW', noShow: true });
     // Old application writes remain possible during expansion.
     await db.exec(`INSERT INTO "Appointment" (id,"customerId","serviceId","scheduledStart","updatedAt") VALUES ('old-writer','customer','priced','2026-11-25 07:00',now())`);
     assert.equal((await db.query(`SELECT "scheduledEnd" FROM "Appointment" WHERE id='old-writer'`)).rows[0].scheduledEnd, null);

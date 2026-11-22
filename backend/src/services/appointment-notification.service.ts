@@ -14,7 +14,7 @@ type SavedAppointment = {
   staff: { user: { firstName: string; lastName: string | null } } | null;
 };
 
-function savedAppointmentUrl(id: string, frontendOrigin: string, justBooked = false): string {
+export function savedAppointmentUrl(id: string, frontendOrigin: string, justBooked = false): string {
   const origin = new URL(frontendOrigin);
   if (!["http:", "https:"].includes(origin.protocol) || origin.username || origin.password) {
     throw new Error("Invalid frontend origin configuration");
@@ -24,11 +24,21 @@ function savedAppointmentUrl(id: string, frontendOrigin: string, justBooked = fa
   return url.toString();
 }
 
+/** Do not send production customers links pointing at a local development server. */
+export function emailFrontendOrigin(): string {
+  const configured = process.env.FRONTEND_ORIGIN?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("FRONTEND_ORIGIN must be configured for appointment emails");
+  }
+  return "http://localhost:5173";
+}
+
 /** Call only after commit. Email configuration/delivery can never fail booking creation. */
 export async function notifyAppointmentCreated(
   appointment: SavedAppointment,
   send = sendAppointmentConfirmationEmail,
-  frontendOrigin = process.env.FRONTEND_ORIGIN ?? "http://localhost:5173",
+  frontendOrigin?: string,
 ): Promise<boolean> {
   try {
     await send({
@@ -43,7 +53,7 @@ export async function notifyAppointmentCreated(
         : null,
       startsAt: appointment.scheduledStart,
       durationMinutes: bookedDurationMinutes(appointment),
-      appointmentUrl: savedAppointmentUrl(appointment.id, frontendOrigin, true),
+      appointmentUrl: savedAppointmentUrl(appointment.id, frontendOrigin ?? emailFrontendOrigin(), true),
     });
     return true;
   } catch {
@@ -68,7 +78,11 @@ export async function notifyCustomerAppointmentChanged(
       type,
       oldStartsAt: previousStart,
       startsAt: appointment.scheduledStart,
-      appointmentUrl: savedAppointmentUrl(appointment.id, process.env.FRONTEND_ORIGIN ?? "http://localhost:5173"),
+      appointmentUrl: savedAppointmentUrl(appointment.id, emailFrontendOrigin()),
+      appointmentId: appointment.id,
+      providerName: appointment.soleProvider?.displayName ?? appointment.business?.name ?? "Provider",
+      durationMinutes: bookedDurationMinutes(appointment),
+      rescheduleCount: appointment.rescheduleCount,
     });
   } catch {
     console.error("Appointment change email failed", { appointmentId: appointment.id });

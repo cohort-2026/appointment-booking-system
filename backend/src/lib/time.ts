@@ -22,3 +22,13 @@ export function bookingTimeLabel(instant: Date): string {
   return new Intl.DateTimeFormat("en-ZA", { timeZone: BOOKING_TIME_ZONE,
     hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(instant) + " SAST";
 }
+
+/** Johannesburg business reporting uses the same calendar at both month boundaries. */
+export function bookingMonthBounds(instant: Date) {
+  const monthKey = bookingDate(instant).slice(0, 7);
+  const year = Number(monthKey.slice(0, 4));
+  const month = Number(monthKey.slice(5));
+  const start = parseBookingDate(monthKey + "-01")!;
+  const nextMonth = new Date(Date.UTC(year, month, 1)).toISOString().slice(0, 10);
+  return { start, end: parseBookingDate(nextMonth)! };
+}

@@ -1,3 +1,4 @@
+import { bookingDate, bookingWeekday, DAY_MS, parseBookingDate } from "../lib/time.js";
 import { bookedDurationMinutes } from "../lib/booking-snapshot.js";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
@@ -43,14 +44,11 @@ export const getStaffDashboard = async (req: AuthenticatedRequest, res: Response
     if (!staff) return res.status(404).json({ success: false, message: "Staff profile not found" });
 
     const now = new Date();
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
-    const startOfTomorrow = new Date(startOfToday);
-    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
-    const startOfWeek = new Date(startOfToday);
-    startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
+    const startOfToday = parseBookingDate(bookingDate(now))!;
+    const startOfTomorrow = new Date(+startOfToday + DAY_MS);
+    const startOfWeek = new Date(+startOfToday - ((bookingWeekday(now) + 6) % 7) * DAY_MS);
     const [todayAppointments, upcomingAppointments, completedAppointments, cancelledAppointments, appointments] = await Promise.all([
-      prisma.appointment.count({ where: { staffId: staff.id, scheduledStart: { gte: startOfToday, lt: startOfTomorrow } } }),
+      prisma.appointment.count({ where: { staffId: staff.id, status: { not: "CANCELLED" }, scheduledStart: { gte: startOfToday, lt: startOfTomorrow } } }),
       prisma.appointment.count({ where: { staffId: staff.id, scheduledStart: { gte: now }, status: { in: ["CONFIRMED", "RESCHEDULED"] } } }),
       prisma.appointment.count({ where: { staffId: staff.id, scheduledStart: { gte: startOfWeek }, status: "COMPLETED" } }),
       prisma.appointment.count({ where: { staffId: staff.id, scheduledStart: { gte: startOfWeek }, status: "CANCELLED" } }),
@@ -108,44 +106,6 @@ export const getStaffAppointments = async (req: AuthenticatedRequest, res: Respo
   } catch (error) {
     console.error("Staff appointments fetch error:", error);
     return res.status(500).json({ success: false, message: "Unable to load your appointments" });
-  }
-};
-
-export const updateStaffAppointmentStatus = async (req: AuthenticatedRequest, res: Response) => {
-  const { status } = req.body as { status?: unknown };
-  if (status !== "COMPLETED" && status !== "NO_SHOW") {
-    return res.status(400).json({ success: false, message: "Staff may mark appointments completed or no-show" });
-  }
-
-  const appointmentId = typeof req.params.id === "string" ? req.params.id : "";
-  if (!appointmentId) return res.status(400).json({ success: false, message: "Invalid appointment ID" });
-
-  try {
-    const staff = await prisma.businessStaff.findUnique({
-      where: { userId: req.user!.userId },
-      select: { id: true },
-    });
-    if (!staff) return res.status(404).json({ success: false, message: "Staff profile not found" });
-
-    const now = new Date();
-    const appointment = await prisma.appointment.findFirst({
-      where: {
-        id: appointmentId,
-        staffId: staff.id,
-        status: { in: ["CONFIRMED", "RESCHEDULED"] },
-      },
-      select: { id: true, scheduledStart: true },
-    });
-    if (!appointment) return res.status(404).json({ success: false, message: "Active appointment not found" });
-    if (appointment.scheduledStart > now) {
-      return res.status(400).json({ success: false, message: "You can update an appointment after its scheduled start time" });
-    }
-
-    await prisma.appointment.update({ where: { id: appointment.id }, data: { status, noShow: status === "NO_SHOW" } });
-    return res.status(200).json({ success: true, message: `Appointment marked ${status === "NO_SHOW" ? "no-show" : "completed"}` });
-  } catch (error) {
-    console.error("Staff appointment status update error:", error);
-    return res.status(500).json({ success: false, message: "Unable to update appointment" });
   }
 };
 

@@ -1,11 +1,10 @@
+import { ACTIVE_APPOINTMENT_STATUSES } from "../lib/appointment-status.js";
 import { bookedDurationMinutes, createBookingSnapshot } from "../lib/booking-snapshot.js";
 import { MIN_RECOVERY_MINUTES } from "../lib/booking-buffer.js";
 import prisma from "../lib/prisma.js";
-import type { AppointmentStatus, Prisma } from "../generated/prisma/client.js";
+import type { Prisma } from "../generated/prisma/client.js";
 import { BOOKING_TIME_ZONE, DAY_MS, bookingDate, bookingWeekday, bookingTimeLabel, parseBookingDate } from "../lib/time.js";
 import { generateAppointmentSlots, intersectAvailabilityWindows, timeRangesOverlap } from "./availability.service.js";
-
-export const ACTIVE_APPOINTMENT_STATUSES: AppointmentStatus[] = ["CONFIRMED", "RESCHEDULED"];
 
 export class BookingError extends Error {
   constructor(message: string, readonly status: number) { super(message); this.name = "BookingError"; }

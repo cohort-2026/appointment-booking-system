@@ -1,3 +1,4 @@
+import { getAppointmentEvents } from "../controllers/appointment-status.controller.js";
 import { Router } from "express";
 import {
   getCustomerDashboard,
@@ -20,5 +21,7 @@ router.post("/appointments", authenticate, requireRole("CUSTOMER"), createCustom
 router.get("/appointments/:id/reschedule-options", authenticate, requireRole("CUSTOMER"), getCustomerRescheduleOptions);
 router.patch("/appointments/:id/cancel", authenticate, requireRole("CUSTOMER"), cancelCustomerAppointment);
 router.patch("/appointments/:id/reschedule", authenticate, requireRole("CUSTOMER"), rescheduleCustomerAppointment);
+
+router.get("/appointments/:id/events", authenticate, requireRole("CUSTOMER"), getAppointmentEvents("CUSTOMER"));
 
 export default router;
