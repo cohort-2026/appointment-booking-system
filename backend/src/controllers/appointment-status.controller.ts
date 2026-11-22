@@ -1,3 +1,4 @@
+import { notifyAppointmentChanged } from "../services/appointment-notification.service.js";
 import type { Response } from "express";
 import prisma from "../lib/prisma.js";
 import type { Prisma } from "../generated/prisma/client.js";
@@ -67,6 +68,9 @@ export function updateAppointmentStatus(actor: Exclude<Actor, "CUSTOMER">) {
           type: status as StaffStatus, reason: reason?.trim() || null,
         }, new Date(), { role: actor, userId });
       }, { isolationLevel: "Serializable" });
+      if (status === "CANCELLED") {
+        await notifyAppointmentChanged(saved.appointment, "CANCELLED", saved.appointment.scheduledStart);
+      }
       return res.json({ success: true, status: saved.appointment.status, message: "Appointment updated." });
     } catch (error) {
       return appointmentFailure(res, error);

@@ -398,3 +398,11 @@ enum AppointmentStatus {
   NO_SHOW
   RESCHEDULED
 }
+
+model AuthRateLimit {
+  key       String   @id
+  count     Int
+  expiresAt DateTime @db.Timestamptz(6)
+
+  @@index([expiresAt])
+}

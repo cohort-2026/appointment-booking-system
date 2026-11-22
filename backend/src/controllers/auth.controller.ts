@@ -489,7 +489,6 @@ export const registerProvider = async (
       bio,
       password,
       confirmPassword,
-      packageTier,
       agree,
     } = req.body;
 
@@ -503,13 +502,12 @@ export const registerProvider = async (
       !category ||
       !experience ||
       !password ||
-      !confirmPassword ||
-      !packageTier
+      !confirmPassword
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "Full name, service name, email, password and package are required",
+          "Full name, service name, email and password are required",
       });
     }
 
@@ -614,14 +612,6 @@ export const registerProvider = async (
       });
     }
 
-    // Validate package
-    if (!["BASIC", "GROWTH"].includes(packageTier)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid provider package",
-      });
-    }
-
     const normalizedEmail = email.toLowerCase().trim();
 
     // Check whether email already exists
@@ -671,17 +661,17 @@ export const registerProvider = async (
       });
     }
 
-    // Find the selected sole provider package
+    // Signup always uses Basic; client-supplied plan/payment fields are ignored.
     const selectedPackage = await prisma.package.findUnique({
       where: {
         providerType_tier: {
           providerType: "SOLE_PROVIDER",
-          tier: packageTier,
+          tier: "BASIC",
         },
       },
     });
 
-    if (!selectedPackage) {
+    if (!selectedPackage || Number(selectedPackage.monthlyPrice) !== 0) {
       return res.status(500).json({
         success: false,
         message: "Selected provider package is not available",
@@ -738,8 +728,7 @@ export const registerProvider = async (
           maxStaff: selectedPackage.maxStaff,
           billingStartDate,
           nextBillingDate,
-          paymentStatus:
-            packageTier === "BASIC" ? "PAID" : "PENDING",
+          paymentStatus: "PAID", // Free plan; no payment was collected.
         },
         include: {
           package: true,
@@ -827,7 +816,6 @@ export const registerBusiness = async (
       address,
       password,
       confirmPassword,
-      packageTier,
       agree,
     } = req.body;
 
@@ -882,14 +870,6 @@ export const registerBusiness = async (
       });
     }
 
-    // Package validation
-    if (packageTier !== "BASIC" && packageTier !== "GROWTH") {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid package selected",
-      });
-    }
-
     const normalizedEmail = email.toLowerCase().trim();
 
     // Check whether email is already registered
@@ -938,17 +918,17 @@ export const registerBusiness = async (
       });
     }
 
-    // Find the selected business package
+    // Signup always uses Basic; client-supplied plan/payment fields are ignored.
     const selectedPackage = await prisma.package.findUnique({
       where: {
         providerType_tier: {
           providerType: "BUSINESS",
-          tier: packageTier,
+          tier: "BASIC",
         },
       },
     });
 
-    if (!selectedPackage) {
+    if (!selectedPackage || Number(selectedPackage.monthlyPrice) !== 0) {
       return res.status(400).json({
         success: false,
         message: "Selected package is not available",
@@ -964,10 +944,8 @@ export const registerBusiness = async (
     // Hash password
     const passwordHash = await bcrypt.hash(password, 12);
 
-    // Basic is free, so it is immediately paid.
-    // Growth requires a subscription payment.
-    const paymentStatus =
-      packageTier === "BASIC" ? "PAID" : "PENDING";
+    // PAID is the existing schema convention for a free plan; no charge occurs.
+    const paymentStatus = "PAID";
 
     const now = new Date();
 

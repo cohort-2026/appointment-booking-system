@@ -7,11 +7,11 @@ import { BookingError } from "./booking.service.js";
 export const customerAppointmentInclude = {
   customer: { select: { firstName: true, email: true } },
   service: { select: { name: true, durationMinutes: true, expectedPrice: true } },
-  business: { select: { name: true, address: true, phone: true, cancellationCutoffHours: true } },
+  business: { select: { name: true, address: true, phone: true, cancellationCutoffHours: true, owner: { select: { email: true } } } },
   soleProvider: { select: {
-    displayName: true, city: true, cancellationCutoffHours: true, user: { select: { phone: true } },
+    displayName: true, city: true, cancellationCutoffHours: true, user: { select: { phone: true, email: true } },
   } },
-  staff: { select: { user: { select: { firstName: true, lastName: true } } } },
+  staff: { select: { user: { select: { firstName: true, lastName: true, email: true } } } },
   events: {
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {

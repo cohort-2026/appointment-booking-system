@@ -65,6 +65,7 @@ export default function Package() {
   }, []);
 
   const changePlan = async (tier: PlanTier) => {
+    if (tier !== "BASIC") return;
     setChangingTier(tier);
     try {
       const response = await apiFetch<{ subscription: SubscriptionInfo }>("/provider/subscription", {
@@ -72,11 +73,7 @@ export default function Package() {
         body: JSON.stringify({ tier }),
       });
       setSubscription(response.subscription);
-      toast.success(
-        response.subscription.paymentStatus === "PENDING"
-          ? "Plan updated. Payment is pending."
-          : "Plan updated successfully.",
-      );
+      toast.success("Basic plan activated.");
     } catch (error) {
       console.error("Provider subscription change failed:", error);
       toast.error(error instanceof Error ? error.message : "Unable to change plan.");
@@ -147,7 +144,7 @@ export default function Package() {
 
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-slate-900">Available plans</h2>
-        <p className="mt-1 text-sm text-slate-500">Choose a plan to switch immediately.</p>
+        <p className="mt-1 text-sm text-slate-500">Basic is available. Paid upgrades are not available yet.</p>
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">
@@ -199,7 +196,7 @@ export default function Package() {
 
               <button
                 type="button"
-                disabled={isCurrent || changingTier !== null}
+                disabled={plan.tier === "GROWTH" || isCurrent || changingTier !== null}
                 onClick={() => void changePlan(plan.tier)}
                 className={`mt-6 w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed ${
                   isCurrent
@@ -211,6 +208,8 @@ export default function Package() {
                   ? "Updating plan..."
                   : isCurrent
                     ? "Current plan"
+                    : plan.tier === "GROWTH"
+                      ? "Not available yet"
                     : subscription
                       ? `${targetIsUpgrade ? "Upgrade" : "Downgrade"} to ${plan.tier}`
                       : `Choose ${plan.tier}`}
@@ -222,7 +221,7 @@ export default function Package() {
 
       {plans.length > 0 && (
         <p className="mt-5 text-sm text-slate-500">
-          Plan changes take effect immediately. A paid plan will show payment as pending until it is processed.
+          Paid upgrades are disabled until payment processing is available.
         </p>
       )}
     </div>

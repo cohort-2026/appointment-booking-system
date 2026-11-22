@@ -123,8 +123,9 @@ export async function createBooking(input: CreateBookingInput, db: Pick<typeof p
       events: { create: { type: "CREATED", actor: "CUSTOMER", actorUserId: input.customerId, newStatus: "CONFIRMED",
         newScheduledStart: input.startsAt, newScheduledEnd: snapshot.scheduledEnd } } },
       include: { service: { select: { name: true, durationMinutes: true } }, customer: { select: { firstName: true, email: true } },
-        staff: { select: { user: { select: { firstName: true, lastName: true } } } },
-        soleProvider: { select: { displayName: true } }, business: { select: { name: true } } } });
+        staff: { select: { user: { select: { firstName: true, lastName: true, email: true } } } },
+        soleProvider: { select: { displayName: true, user: { select: { email: true } } } },
+        business: { select: { name: true, owner: { select: { email: true } } } } } });
   }, { isolationLevel: "Serializable", maxWait: 15_000, timeout: 20_000 });
   } catch (error) {
     if (isBookingWriteConflict(error)) throw new BookingError("That time was just booked. Please choose another slot.", 409);

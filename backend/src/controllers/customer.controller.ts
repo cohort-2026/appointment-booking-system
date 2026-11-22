@@ -8,7 +8,7 @@ import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
 import { BookingError, createBooking } from "../services/booking.service.js";
 
-import { notifyAppointmentCreated, notifyCustomerAppointmentChanged } from "../services/appointment-notification.service.js";
+import { notifyAppointmentCreated, notifyAppointmentChanged } from "../services/appointment-notification.service.js";
 
 export const getCustomerDashboard = async (
   req: AuthenticatedRequest,
@@ -268,7 +268,7 @@ export const cancelCustomerAppointment = async (req: AuthenticatedRequest, res: 
     const { appointment, previousStart } = await changeCustomerAppointment(appointmentOwner(req), {
       action: "cancel", reason: typeof reason === "string" ? reason.trim() || null : null,
     });
-    void notifyCustomerAppointmentChanged(appointment, "CANCELLED", previousStart);
+    await notifyAppointmentChanged(appointment, "CANCELLED", previousStart);
     return res.json({ success: true, appointment: customerAppointmentDetails(appointment) });
   } catch (error) {
     return appointmentError(res, error);
@@ -282,7 +282,7 @@ export const rescheduleCustomerAppointment = async (req: AuthenticatedRequest, r
   }
   try {
     const { appointment, previousStart } = await changeCustomerAppointment(appointmentOwner(req), { action: "reschedule", startsAt: new Date(value) });
-    void notifyCustomerAppointmentChanged(appointment, "RESCHEDULED", previousStart);
+    await notifyAppointmentChanged(appointment, "RESCHEDULED", previousStart);
     return res.json({ success: true, appointment: customerAppointmentDetails(appointment) });
   } catch (error) {
     return appointmentError(res, error);

@@ -14,6 +14,7 @@ const url=new URL(connection); url.pathname=`/${name}`;
 process.env.DATABASE_URL=url.toString(); process.env.JWT_SECRET='local-test-secret';
 delete process.env.RESEND_API_KEY;
 process.env.CRON_SECRET='local-cron-test';
+delete process.env.VERCEL;
 const sql=new pg.Pool({connectionString:url.toString()});
 let prisma,server; let checks=0;
 async function check(label,run){await run();checks++;console.log(`PASS ${label}`);}
@@ -106,11 +107,29 @@ try {
   });
   const router=(await import('../src/routes/customer.routes.js')).default;
   const app=express();app.use(express.json());app.use('/api/customer',router);
-  for (const role of ['business', 'provider', 'staff']) {
+  for (const role of ['auth', 'business', 'provider', 'staff']) {
     app.use(`/api/${role}`, (await import(`../src/routes/${role}.routes.js`)).default);
   }
   server=app.listen(0,'127.0.0.1');await once(server,'listening');
   const origin=`http://127.0.0.1:${server.address().port}`;
+  await check('auth requests share a PostgreSQL limit under concurrency and recover after expiry', async () => {
+    const attempt = () => fetch(origin + '/api/auth/forgot-password', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+    });
+    const responses = await Promise.all(Array.from({ length: 8 }, attempt));
+    assert.equal(responses.filter(response => response.status === 400).length, 5);
+    const limited = responses.filter(response => response.status === 429);
+    assert.equal(limited.length, 3);
+    for (const response of limited) {
+      const retryAfter = Number(response.headers.get('Retry-After'));
+      assert.ok(retryAfter >= 1 && retryAfter <= 900);
+    }
+    await sql.query('UPDATE "AuthRateLimit" SET "expiresAt" = NOW()');
+    assert.equal((await attempt()).status, 400);
+    const buckets = await prisma.authRateLimit.findMany();
+    assert.equal(buckets.length, 1);
+    assert.equal(buckets[0].count, 1);
+  });
   const token=id=>jwt.sign({userId:id,role:'CUSTOMER'},process.env.JWT_SECRET);
   await check('saved detail is direct, ownership-checked and excludes internal tokens',async()=>{
     const r=await fetch(`${origin}/api/customer/appointments/${booked.id}`,{headers:{authorization:`Bearer ${token('c1')}`}});assert.equal(r.status,200);

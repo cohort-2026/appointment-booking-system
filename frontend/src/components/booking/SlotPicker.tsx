@@ -26,7 +26,11 @@ export default function SlotPicker(props: {
       : <fieldset><legend className="mb-3 font-semibold">Choose a start time</legend><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {props.slots.map(slot => <button key={slot.startsAt} type="button" disabled={props.disabled || slot.status !== "AVAILABLE"}
           aria-pressed={props.selected === slot.startsAt} onClick={() => props.onSelect(slot.startsAt)}
-          className={`min-h-12 rounded-xl border p-3 text-sm font-semibold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 ${props.selected === slot.startsAt ? "border-sky-700 bg-sky-700 text-white" : "border-slate-200 enabled:hover:border-sky-600"}`}>
+          className={`min-h-12 rounded-xl border p-3 text-sm font-semibold disabled:cursor-not-allowed ${slot.status === "BOOKED" && slot.recoveryUntil
+            ? "border-amber-300 bg-amber-100 text-amber-950"
+            : props.selected === slot.startsAt
+              ? "border-sky-700 bg-sky-700 text-white disabled:bg-slate-100 disabled:text-slate-500"
+              : "border-slate-200 enabled:hover:border-sky-600 disabled:bg-slate-100 disabled:text-slate-500"}`}>
           {slot.label}
         </button>)}
       </div></fieldset>}

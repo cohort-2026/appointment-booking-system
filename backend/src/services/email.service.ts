@@ -211,3 +211,31 @@ export async function sendAppointmentReminderEmail(input: {
     `<p>Hi ${escapeHtml(input.firstName)},</p><p>${escapeHtml(sentence)}</p><p><a href="${escapeHtml(input.appointmentUrl)}">View your booking</a></p>`,
   );
 }
+
+export async function sendAppointmentScheduleAlert(input: {
+  to: string;
+  audience: "owner" | "staff";
+  change: "CREATED" | "CANCELLED" | "RESCHEDULED";
+  previousStart: Date | undefined;
+  startsAt: Date;
+  serviceName: string;
+  providerName: string;
+  appointmentId: string;
+}): Promise<void> {
+  const time = new Intl.DateTimeFormat("en-ZA", {
+    dateStyle: "long", timeStyle: "short", timeZone: "Africa/Johannesburg",
+  });
+  const subject = {
+    CREATED: input.audience === "staff" ? "New booking assigned to you" : "New booking for your schedule",
+    CANCELLED: "Booking cancelled on your schedule",
+    RESCHEDULED: "Booking moved on your schedule",
+  }[input.change];
+  const schedule = input.change === "RESCHEDULED" && input.previousStart
+    ? `Moved from ${time.format(input.previousStart)} (SAST) to ${time.format(input.startsAt)} (SAST).`
+    : `${time.format(input.startsAt)} (SAST).`;
+  const lines = [`${input.serviceName} with ${input.providerName}`, schedule, `Reference: ${input.appointmentId}`];
+  await sendEmail(
+    input.to, subject, lines.join("\n"),
+    lines.map(line => `<p>${escapeHtml(line)}</p>`).join(""),
+  );
+}

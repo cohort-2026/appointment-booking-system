@@ -402,9 +402,18 @@ export const changeProviderSubscription = async (req: AuthenticatedRequest, res:
       return res.status(401).json({ success: false, message: "Authentication required" });
     }
 
-    const { tier } = req.body as { tier?: unknown };
+    const tier: unknown = req.body?.tier;
     if (tier !== "BASIC" && tier !== "GROWTH") {
       return res.status(400).json({ success: false, message: "Select a valid provider plan" });
+    }
+
+    // No payment gateway is connected. Reject before any subscription mutation.
+    if (tier === "GROWTH") {
+      return res.status(403).json({
+        success: false,
+        code: "PAID_UPGRADES_UNAVAILABLE",
+        message: "Paid upgrades are not available yet. Your current plan has not changed.",
+      });
     }
 
     const provider = await getSoleProvider(req.user.userId);
@@ -423,7 +432,7 @@ export const changeProviderSubscription = async (req: AuthenticatedRequest, res:
       }),
     ]);
 
-    if (!selectedPackage) {
+    if (!selectedPackage || Number(selectedPackage.monthlyPrice) !== 0) {
       return res.status(500).json({ success: false, message: "Selected provider plan is not available" });
     }
 
@@ -444,7 +453,6 @@ export const changeProviderSubscription = async (req: AuthenticatedRequest, res:
     const now = new Date();
     const nextBillingDate = new Date(now);
     nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
-    const isPaidPlan = Number(selectedPackage.monthlyPrice) > 0;
     const isUpgrade =
       currentSubscription !== null &&
       Number(selectedPackage.monthlyPrice) > Number(currentSubscription.package.monthlyPrice);
@@ -466,7 +474,7 @@ export const changeProviderSubscription = async (req: AuthenticatedRequest, res:
           maxStaff: selectedPackage.maxStaff,
           billingStartDate: now,
           nextBillingDate,
-          paymentStatus: isPaidPlan ? "PENDING" : "PAID",
+          paymentStatus: "PAID", // Basic is free.
           upgradedAt: isUpgrade ? now : null,
         },
       });
