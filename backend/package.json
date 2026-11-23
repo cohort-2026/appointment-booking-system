@@ -8,7 +8,9 @@
     "start": "tsx src/server.ts",
     "test": "node --import tsx --test src/**/*.test.ts",
     "db:seed": "tsx src/seed.ts",
-    "db:seed:admin": "tsx src/seed-admin.ts"
+    "db:seed:admin": "tsx src/seed-admin.ts",
+    "test:foundation": "node --test scripts/test-foundation.mjs",
+    "test:booking:integration": "node --import tsx scripts/test-booking-integration.mjs"
   },
   "keywords": [],
   "author": "",
@@ -34,6 +36,7 @@
     "resend": "^6.34.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

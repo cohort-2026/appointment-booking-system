@@ -1,13 +1,14 @@
+import { bookingMinute, bookingWeekday } from "../lib/time.js";
 import type { Request, Response } from "express";
 import prisma from "../lib/prisma.js";
 import { formatPublicHours, type AvailabilityWindow } from "../lib/public-hours.js";
 import { capitalizeBusinessName } from "../lib/business-name.js";
-import { BookingError, resolveBookingAvailability, withBookingTransaction } from "../services/booking.service.js";
+import { BookingError, resolveBookingAvailability } from "../services/booking.service.js";
 
 function isCurrentlyOpen(windows: AvailabilityWindow[], now = new Date()): boolean {
-  const minute = now.getHours() * 60 + now.getMinutes();
+  const minute = bookingMinute(now);
   return windows.some((window) => {
-    if (!window.active || window.dayOfWeek !== now.getDay()) return false;
+    if (!window.active || window.dayOfWeek !== bookingWeekday(now)) return false;
     const startParts = window.startTime.split(":").map(Number);
     const endParts = window.endTime.split(":").map(Number);
     const startHour = startParts[0] ?? Number.NaN;
@@ -219,13 +220,13 @@ export const getPublicProviderAvailability = async (req: Request, res: Response)
   }
 
   try {
-    const availability = await withBookingTransaction((transaction) => resolveBookingAvailability(transaction, {
+    const availability = await resolveBookingAvailability(prisma, {
       providerKind: kind,
       providerId: id,
       serviceId,
       date,
       ...(staffId ? { staffId } : {}),
-    }));
+    });
     return res.status(200).json({ success: true, ...availability });
   } catch (error) {
     if (error instanceof BookingError) {

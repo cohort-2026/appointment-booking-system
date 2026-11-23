@@ -10,6 +10,8 @@ export type BookingDraft = {
   staffId?: string;
   customerId?: string;
   savedAt: number;
+  source?: "public" | "dashboard";
+  customerNotes?: string;
 };
 
 export function parseBookingDraft(raw: string | null): BookingDraft | null {
@@ -34,6 +36,8 @@ export function parseBookingDraft(raw: string | null): BookingDraft | null {
       ...(value.staffId ? { staffId: value.staffId } : {}),
       ...(value.customerId ? { customerId: value.customerId } : {}),
       // Legacy drafts have no timestamp: retain service information, but never auto-submit them.
+      ...(value.source === "dashboard" || value.source === "public" ? { source: value.source } : {}),
+      ...(typeof value.customerNotes === "string" && Array.from(value.customerNotes).length <= 500 ? { customerNotes: value.customerNotes } : {}),
       savedAt: typeof value.savedAt === "number" && Number.isFinite(value.savedAt) ? value.savedAt : 0,
     };
   } catch {
@@ -75,6 +79,6 @@ export function draftBelongsToCustomer(draft: BookingDraft, customerId: string):
   return !draft.customerId || draft.customerId === customerId;
 }
 
-export function bookingDraftPath(draft: Pick<BookingDraft, "providerId">): string {
-  return `/providers/${encodeURIComponent(draft.providerId)}`;
+export function bookingDraftPath(draft: Pick<BookingDraft, "providerId" | "source">): string {
+  return `${draft.source === "dashboard" ? "/dashboard/customer/book" : "/providers"}/${encodeURIComponent(draft.providerId)}`;
 }

@@ -1,3 +1,5 @@
+import { sastDate, formatSast } from "../../../lib/bookingTime";
+import AppointmentHistoryDrawer from "../../../components/booking/AppointmentHistoryDrawer";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -147,39 +149,9 @@ export default function BusinessAppointments() {
     return ["ALL", ...Array.from(names)];
   }, [appointments]);
 
-  // Update appointment status via dropdown
-  const handleUpdateStatus = async (id: string, newStatus: AppointmentStatus) => {
-    const target = appointments.find((a) => a.id === id);
-    if (!target) return;
-
-    if (target.status === newStatus) return;
-
-    // Rule: NO_SHOW can only be recorded after scheduled start time
-    if (newStatus === "NO_SHOW" && new Date(target.time).getTime() > Date.now()) {
-      toast.error("No-show can only be recorded after the appointment time has passed.");
-      return;
-    }
-
-    try {
-      await apiFetch(`/business/appointments/${id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      setAppointments((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a))
-      );
-
-      toast.success(`Status updated to ${newStatus.replace("_", " ")}.`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update status.");
-    }
-  };
-
   // Filtered Appointments
   const filteredAppointments = useMemo(() => {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startOfToday = Date.parse(sastDate() + "T00:00:00+02:00");
     const endOfToday = startOfToday + 86400000;
     const query = searchQuery.toLowerCase().trim();
 
@@ -189,11 +161,11 @@ export default function BusinessAppointments() {
       // Tab filter
       let matchesTab = true;
       if (activeTab === "TODAY") {
-        matchesTab = apptTime >= startOfToday && apptTime < endOfToday;
+        matchesTab = a.status !== "CANCELLED" && apptTime >= startOfToday && apptTime < endOfToday;
       } else if (activeTab === "UPCOMING") {
-        matchesTab = apptTime >= endOfToday && a.status === "CONFIRMED";
+        matchesTab = apptTime >= endOfToday && ["CONFIRMED", "RESCHEDULED"].includes(a.status);
       } else if (activeTab === "HISTORY") {
-        matchesTab = apptTime < startOfToday || a.status !== "CONFIRMED";
+        matchesTab = apptTime < startOfToday || !["CONFIRMED", "RESCHEDULED"].includes(a.status);
       }
 
       // Staff filter
@@ -452,21 +424,12 @@ export default function BusinessAppointments() {
                     </tr>
                   ) : (
                     filteredAppointments.map((appt) => {
-                      const d = new Date(appt.time);
-                      const isTerminal =
-                        appt.status === "COMPLETED" ||
-                        appt.status === "CANCELLED" ||
-                        appt.status === "NO_SHOW";
-
                       return (
                         <tr key={appt.id} className="transition hover:bg-slate-50/50">
                           {/* Time */}
                           <td className="px-6 py-4">
                             <p className="font-bold text-slate-900">
-                              {d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            </p>
-                            <p className="text-xs text-slate-400">
-                              {d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}
+                              {formatSast(appt.time)}
                             </p>
                           </td>
 
@@ -494,35 +457,13 @@ export default function BusinessAppointments() {
                             </div>
                           </td>
 
-                          {/* Status as Interactive Dropdown */}
                           <td className="px-6 py-4 text-right">
-                            <div className="inline-flex items-center gap-1.5">
-                              {isTerminal && (
-                                <span className="text-slate-400" title="Locked terminal status">
-                                  <Icons.Lock />
-                                </span>
-                              )}
-                              <select
-                                value={appt.status}
-                                disabled={isTerminal}
-                                onChange={(e) =>
-                                  handleUpdateStatus(appt.id, e.target.value as AppointmentStatus)
-                                }
-                                className={`cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold outline-none transition disabled:cursor-not-allowed disabled:opacity-75 ${
-                                  appt.status === "COMPLETED"
-                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                    : appt.status === "NO_SHOW"
-                                    ? "border-rose-200 bg-rose-50 text-rose-700"
-                                    : appt.status === "CANCELLED"
-                                    ? "border-slate-200 bg-slate-100 text-slate-500"
-                                    : "border-sky-200 bg-sky-50 text-sky-700"
-                                }`}
-                              >
-                                <option value="CONFIRMED">Confirmed</option>
-                                <option value="COMPLETED">Completed</option>
-                                <option value="NO_SHOW">No-Show</option>
-                                <option value="CANCELLED">Cancelled</option>
-                              </select>
+                            <div className="inline-flex items-center gap-2">
+                              <span className="capitalize">{appt.status.toLowerCase().replaceAll("_", " ")}</span>
+                              <AppointmentHistoryDrawer role="business" id={appt.id} startsAt={appt.time}
+                                title={`${appt.service} · ${appt.customerName}`} onSaved={status =>
+                                  setAppointments(current => current.map(item => item.id === appt.id ? { ...item, status } : item))}
+                              />
                             </div>
                           </td>
                         </tr>

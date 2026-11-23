@@ -1,3 +1,4 @@
+import { authRateLimit } from "../middleware/auth-rate-limit.js";
 import { Router } from "express";
 import {
   acceptStaffInvitation,
@@ -18,6 +19,7 @@ import {
 } from "../middleware/auth.middleware.js";
 
 const router: ReturnType<typeof Router> = Router();
+router.use(authRateLimit);
 
 router.post("/register/customer", registerCustomer);
 router.post("/register/provider", registerProvider);

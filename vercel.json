@@ -30,5 +30,11 @@
         "service": "frontend"
       }
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/jobs/daily",
+      "schedule": "0 5 * * *"
+    }
   ]
 }

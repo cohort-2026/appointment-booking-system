@@ -66,6 +66,7 @@ import AdminDashboard from "../pages/dashboard/admin/Dashboard";
 export default function AppRoutes() {
   return (
     <Routes>
+      <Route path="/manage/:token" element={<Navigate to="/dashboard/customer/appointments" replace />} />
       {/* Public pages */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Home />} />
@@ -128,6 +129,7 @@ export default function AppRoutes() {
       >
         <Route index element={<CustomerDashboard />} />
         <Route path="book" element={<CustomerBook />} />
+        <Route path="book/:id" element={<ProviderProfile dashboard />} />
         <Route path="appointments" element={<CustomerAppointments />} />
         <Route path="appointments/:id" element={<CustomerAppointmentDetails />} />
         <Route path="profile" element={<CustomerProfile />} />

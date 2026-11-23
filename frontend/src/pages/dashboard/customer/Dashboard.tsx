@@ -140,7 +140,7 @@ export default function CustomerDashboard() {
             <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Service</p><p className="mt-1 font-semibold text-slate-900">{justBookedAppointment.service}</p></div>
             <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Provider</p><p className="mt-1 font-semibold text-slate-900">{justBookedAppointment.providerName}</p></div>
             {justBookedAppointment.staffName && <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Assigned staff</p><p className="mt-1 font-semibold text-slate-900">{justBookedAppointment.staffName}{justBookedAppointment.staffTitle ? ` · ${justBookedAppointment.staffTitle}` : ""}</p></div>}
-            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Date and time</p><p className="mt-1 font-semibold text-slate-900">{new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "short" }).format(new Date(justBookedAppointment.time))}</p></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Date and time</p><p className="mt-1 font-semibold text-slate-900">{new Intl.DateTimeFormat("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "full", timeStyle: "short" }).format(new Date(justBookedAppointment.time))} SAST</p></div>
             <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Duration</p><p className="mt-1 font-semibold text-slate-900">{justBookedAppointment.durationMinutes} minutes</p></div>
             {justBookedAppointment.price !== null && <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Price</p><p className="mt-1 font-semibold text-slate-900">R{justBookedAppointment.price}</p></div>}
             <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p><p className="mt-1 font-semibold capitalize text-slate-900">{justBookedAppointment.status.toLowerCase().replaceAll("_", " ")}</p></div>
@@ -223,10 +223,10 @@ export default function CustomerDashboard() {
                 </div>
                 <div className="flex items-center justify-between gap-4 sm:justify-end">
                   <p className="text-sm text-slate-600">
-                    {new Intl.DateTimeFormat(undefined, {
+                    {new Intl.DateTimeFormat("en-ZA", { timeZone: "Africa/Johannesburg",
                       dateStyle: "medium",
                       timeStyle: "short",
-                    }).format(new Date(appointment.time))}
+                    }).format(new Date(appointment.time))} SAST
                   </p>
                   <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
                     {appointment.status.toLowerCase().replaceAll("_", " ")}

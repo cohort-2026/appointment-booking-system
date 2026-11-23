@@ -16,33 +16,6 @@ const CATEGORIES = [
 
 const STAFF_SIZES = ["2–5 staff", "6–15 staff", "16–50 staff", "51+ staff"];
 
-type PackageTier = "BASIC" | "GROWTH";
-
-const PACKAGES: {
-  tier: PackageTier;
-  label: string;
-  price: string;
-  features: string[];
-}[] = [
-    {
-      tier: "BASIC",
-      label: "Basic",
-      price: "Free",
-      features: ["Up to 3 staff", "6 bookings/day per staff", "Standard placement"],
-    },
-    {
-      tier: "GROWTH",
-      label: "Growth",
-      price: "R149 / month",
-      features: [
-        "Up to 15 staff",
-        "20 bookings/day per staff",
-        "Featured placement",
-        "Advanced analytics & re-engagement tools",
-      ],
-    },
-  ];
-
 function getPasswordChecks(password: string) {
   return [
     { label: "At least 8 characters", passed: password.length >= 8 },
@@ -79,7 +52,6 @@ export default function BusinessRegister() {
     address: "",
     password: "",
     confirmPassword: "",
-    packageTier: "BASIC" as PackageTier,
     agree: false,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -347,46 +319,12 @@ export default function BusinessRegister() {
                   </div>
                 </div>
 
-                {/* Package selection — required at onboarding (FR-46) */}
-                <div>
-                  <span className="text-sm font-medium text-slate-700">Choose your package</span>
-                  <p className="mt-1 text-xs text-slate-500">
-                    You can upgrade or downgrade later from your dashboard.
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <h2 className="text-sm font-semibold text-slate-800">Basic — Free</h2>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Your account starts on Basic. No payment details are required.
+                    Paid upgrades are not available yet.
                   </p>
-                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                    {PACKAGES.map((pkg) => {
-                      const active = form.packageTier === pkg.tier;
-                      return (
-                        <button
-                          key={pkg.tier}
-                          type="button"
-                          onClick={() => update("packageTier", pkg.tier)}
-                          className="rounded-2xl border p-4 text-left transition-colors"
-                          style={{
-                            borderColor: active ? ACCENT : "#E2E8F0",
-                            backgroundColor: active ? ACCENT_SOFT : "#FFFFFF",
-                          }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-slate-800">{pkg.label}</span>
-                            <span
-                              className="text-xs font-semibold"
-                              style={{ color: active ? ACCENT : "#94A3B8" }}
-                            >
-                              {pkg.price}
-                            </span>
-                          </div>
-                          <ul className="mt-2 space-y-1">
-                            {pkg.features.map((feature) => (
-                              <li key={feature} className="text-xs text-slate-500">
-                                • {feature}
-                              </li>
-                            ))}
-                          </ul>
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
