@@ -19,6 +19,8 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { ChevronsUpDownIcon, SparklesIcon, BadgeCheckIcon, CreditCardIcon, BellIcon, LogOutIcon } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { useAuth } from "@/hooks/useAuth"
 
 export function NavUser({
   user,
@@ -30,6 +32,22 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const { logout, user: authUser } = useAuth()
+  const navigate = useNavigate()
+  const profilePaths: Record<string, string> = {
+    CUSTOMER: "/dashboard/customer/profile",
+    BUSINESS_OWNER: "/dashboard/business/profile",
+    SOLE_PROVIDER: "/dashboard/provider/profile",
+    BUSINESS_STAFF: "/dashboard/staff/profile",
+    ADMIN: "/dashboard/admin/profile",
+  }
+  const profilePath = authUser ? profilePaths[authUser.role] ?? "/dashboard" : "/dashboard"
+  const initials = user.name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "U"
 
   return (
     <SidebarMenu>
@@ -42,7 +60,7 @@ export function NavUser({
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -61,7 +79,7 @@ export function NavUser({
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>
@@ -79,9 +97,8 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheckIcon
-                />
+              <DropdownMenuItem onSelect={() => navigate(profilePath)}>
+                <BadgeCheckIcon />
                 Account
               </DropdownMenuItem>
               <DropdownMenuItem>
@@ -96,10 +113,11 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <LogOutIcon
-              />
-              Log out
+            <DropdownMenuItem
+              onSelect={() => void logout().finally(() => navigate("/login", { replace: true }))}
+            >
+              <LogOutIcon />
+              Logout
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

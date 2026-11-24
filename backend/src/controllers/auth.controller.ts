@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import prisma from "../lib/prisma.js";
 import jwt from "jsonwebtoken";
 import { hashStaffInvitationToken } from "../lib/staff-invitation.js";
+import { normalizePhone as normalizeAccountPhone } from "../lib/phone.js";
+import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import {
   issueOtp,
   issuePasswordResetOtp,
@@ -469,6 +471,62 @@ export const getMe = async (
       success: false,
       message: "Something went wrong",
     });
+  }
+};
+
+export const updateMe = async (req: AuthenticatedRequest, res: Response) => {
+  const body = req.body as Record<string, unknown>;
+  const allowedFields = new Set(["firstName", "lastName", "phone"]);
+  const invalidField = Object.keys(body ?? {}).find((field) => !allowedFields.has(field));
+  if (!body || typeof body !== "object" || Array.isArray(body) || invalidField) {
+    return res.status(400).json({
+      success: false,
+      message: invalidField ? `Unsupported profile field: ${invalidField}` : "A profile object is required",
+    });
+  }
+
+  const data: { firstName?: string; lastName?: string | null; phone?: string | null } = {};
+  if (Object.hasOwn(body, "firstName")) {
+    if (typeof body.firstName !== "string" || !/^[\p{L}][\p{L}\p{M} .'-]{0,49}$/u.test(body.firstName.trim())) {
+      return res.status(400).json({ success: false, message: "Enter a valid first name" });
+    }
+    data.firstName = body.firstName.trim();
+  }
+  if (Object.hasOwn(body, "lastName")) {
+    if (body.lastName !== null && (typeof body.lastName !== "string" || body.lastName.trim().length > 80)) {
+      return res.status(400).json({ success: false, message: "Last name must be 80 characters or fewer" });
+    }
+    data.lastName = typeof body.lastName === "string" ? body.lastName.trim() || null : null;
+  }
+  if (Object.hasOwn(body, "phone")) {
+    if (body.phone !== null && typeof body.phone !== "string") {
+      return res.status(400).json({ success: false, message: "Phone must be a string or null" });
+    }
+    const rawPhone = typeof body.phone === "string" ? body.phone.trim() : "";
+    const phone = rawPhone ? normalizeAccountPhone(rawPhone) : null;
+    if (rawPhone && !phone) {
+      return res.status(400).json({ success: false, message: "Enter a valid South African phone number" });
+    }
+    data.phone = phone;
+  }
+  if (Object.keys(data).length === 0) {
+    return res.status(400).json({ success: false, message: "At least one profile field is required" });
+  }
+
+  try {
+    await prisma.user.update({ where: { id: req.user!.userId }, data });
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      include: USER_ROLE_INCLUDE,
+    });
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    return res.status(200).json({ success: true, user: serializeUser(user) });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
+      return res.status(409).json({ success: false, message: "That phone number is already in use" });
+    }
+    console.error("Update current user error:", error);
+    return res.status(500).json({ success: false, message: "Unable to update your profile" });
   }
 };
 

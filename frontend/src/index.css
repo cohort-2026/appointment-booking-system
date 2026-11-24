@@ -186,7 +186,7 @@
   background: transparent !important;
 }
 
-.business-page-content > .business-legacy-page > aside,
+
 .business-page-content > .business-legacy-page > .business-mobile-overlay {
   display: none !important;
 }
@@ -197,4 +197,19 @@
 
 .business-page-content > .business-legacy-page > main > header {
   display: none !important;
+}
+
+/* Dashboard route compatibility:
+   Reusable AppLayout owns the sidebar and navbar. Hide legacy page-local
+   shells while dashboard pages are being migrated into the shared layout. */
+.dashboard-shell-content > div > aside,
+.dashboard-shell-content > div > .business-mobile-overlay,
+.dashboard-shell-content > div > main > header,
+.dashboard-shell-content > div > header {
+  display: none !important;
+}
+
+.dashboard-shell-content > div > main,
+.dashboard-shell-content > .business-legacy-page > main {
+  padding-left: 0 !important;
 }

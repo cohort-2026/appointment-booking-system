@@ -1,192 +1,51 @@
-"use client"
-
 import * as React from "react"
+import { Calendar, Home, Settings, Users, Scissors, DollarSign, ShieldCheck, Clock, LogOut } from "lucide-react"
+import { NavMain } from "./nav-main"
+import { TeamSwitcher } from "./team-switcher"
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
+import { Button } from "@/components/ui/button"
+import { useAuth } from "@/hooks/useAuth" // Adjust path if needed
 
-import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
-import { NavUser } from "@/components/nav-user"
-import { TeamSwitcher } from "@/components/team-switcher"
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-  SidebarRail,
-} from "@/components/ui/sidebar"
-import { GalleryVerticalEndIcon, AudioLinesIcon, TerminalIcon, TerminalSquareIcon, BotIcon, BookOpenIcon, Settings2Icon, FrameIcon, PieChartIcon, MapIcon } from "lucide-react"
+export type UserRole = "customer" | "owner" | "staff" | "provider" | "admin"
 
-// This is sample data.
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
-  teams: [
-    {
-      name: "Acme Inc",
-      logo: (
-        <GalleryVerticalEndIcon
-        />
-      ),
-      plan: "Enterprise",
-    },
-    {
-      name: "Acme Corp.",
-      logo: (
-        <AudioLinesIcon
-        />
-      ),
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      logo: (
-        <TerminalIcon
-        />
-      ),
-      plan: "Free",
-    },
-  ],
-  navMain: [
-    {
-      title: "Playground",
-      url: "#",
-      icon: (
-        <TerminalSquareIcon
-        />
-      ),
-      isActive: true,
-      items: [
-        {
-          title: "History",
-          url: "#",
-        },
-        {
-          title: "Starred",
-          url: "#",
-        },
-        {
-          title: "Settings",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Models",
-      url: "#",
-      icon: (
-        <BotIcon
-        />
-      ),
-      items: [
-        {
-          title: "Genesis",
-          url: "#",
-        },
-        {
-          title: "Explorer",
-          url: "#",
-        },
-        {
-          title: "Quantum",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Documentation",
-      url: "#",
-      icon: (
-        <BookOpenIcon
-        />
-      ),
-      items: [
-        {
-          title: "Introduction",
-          url: "#",
-        },
-        {
-          title: "Get Started",
-          url: "#",
-        },
-        {
-          title: "Tutorials",
-          url: "#",
-        },
-        {
-          title: "Changelog",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Settings",
-      url: "#",
-      icon: (
-        <Settings2Icon
-        />
-      ),
-      items: [
-        {
-          title: "General",
-          url: "#",
-        },
-        {
-          title: "Team",
-          url: "#",
-        },
-        {
-          title: "Billing",
-          url: "#",
-        },
-        {
-          title: "Limits",
-          url: "#",
-        },
-      ],
-    },
-  ],
-  projects: [
-    {
-      name: "Design Engineering",
-      url: "#",
-      icon: (
-        <FrameIcon
-        />
-      ),
-    },
-    {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: (
-        <PieChartIcon
-        />
-      ),
-    },
-    {
-      name: "Travel",
-      url: "#",
-      icon: (
-        <MapIcon
-        />
-      ),
-    },
-  ],
+const getNavItems = (role: UserRole) => {
+  const common = [
+    { title: "Dashboard", url: `/dashboard/${role === "owner" ? "business" : role}`, icon: <Home /> },
+    { title: "Appointments", url: `/dashboard/${role === "owner" ? "business" : role}/appointments`, icon: <Calendar /> },
+  ]
+
+  switch (role) {
+    case "customer": return [...common, { title: "Book a Service", url: "/dashboard/customer/book", icon: <Scissors /> }, { title: "My Profile", url: "/dashboard/customer/profile", icon: <Users /> }]
+    case "staff": return [{ title: "My Day", url: "/dashboard/staff", icon: <Calendar /> }, { title: "My Schedule", url: "/dashboard/staff/availability", icon: <Clock /> }, { title: "My Profile", url: "/dashboard/staff/profile", icon: <Users /> }]
+    case "owner": return [{ title: "Overview", url: "/dashboard/business", icon: <Home /> }, { title: "Appointments", url: "/dashboard/business/appointments", icon: <Calendar /> }, { title: "Team", url: "/dashboard/business/staff", icon: <Users /> }, { title: "Services", url: "/dashboard/business/services", icon: <Scissors /> }, { title: "Analytics", url: "/dashboard/business/analytics", icon: <DollarSign /> }, { title: "Settings", url: "/dashboard/business/profile", icon: <Settings /> }]
+    case "provider": return [...common, { title: "My Availability", url: "/dashboard/provider/availability", icon: <Clock /> }, { title: "My Profile", url: "/dashboard/provider/profile", icon: <Users /> }]
+    case "admin": return [{ title: "Platform Overview", url: "/dashboard/admin", icon: <ShieldCheck /> }, { title: "Businesses", url: "/dashboard/admin/businesses", icon: <Users /> }, { title: "My Profile", url: "/dashboard/admin/profile", icon: <Settings /> }]
+    default: return []
+  }
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ role, ...props }: React.ComponentProps<typeof Sidebar> & { role: UserRole }) {
+  const { logout } = useAuth();
+  const teams = [{
+    name: role === "admin" ? "ITThynkAppoint" : role === "provider" ? "Provider Console" : role === "staff" ? "Staff Workspace" : role === "owner" ? "Business Console" : "Customer Account",
+    logo: role === "admin" ? <ShieldCheck /> : role === "customer" ? <Users /> : <Scissors />,
+    plan: role === "admin" ? "Platform" : role === "owner" ? "Business" : "Workspace",
+  }]
+
   return (
-    <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
-      </SidebarHeader>
-      <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
-      </SidebarContent>
-      <SidebarFooter>
-        <NavUser user={data.user} />
+    <Sidebar collapsible="icon" className="border-r border-slate-800 bg-[#0B1220] text-slate-300" {...props}>
+      <SidebarHeader className="border-b border-slate-800/50"><TeamSwitcher teams={teams} /></SidebarHeader>
+      <SidebarContent><NavMain items={getNavItems(role)} /></SidebarContent>
+      <SidebarFooter className="border-t border-slate-800/50 p-3">
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={() => void logout()}
+          className="w-full justify-start gap-3 text-slate-400 hover:bg-red-500/10 hover:text-red-300"
+        >
+          <LogOut />
+          <span>Logout</span>
+        </Button>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

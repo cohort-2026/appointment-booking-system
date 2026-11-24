@@ -42,7 +42,7 @@ export default function Profile() {
     setNotice(null);
 
     try {
-      const response = await apiFetch<{ success: boolean; user: NonNullable<typeof user> }>("/customer/profile", {
+      const response = await apiFetch<{ success: boolean; user: NonNullable<typeof user> }>("/auth/me", {
         method: "PATCH",
         body: JSON.stringify({
           firstName: form.firstName.trim(),
