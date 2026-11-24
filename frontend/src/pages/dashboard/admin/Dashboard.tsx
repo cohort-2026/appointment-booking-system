@@ -1,6 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../hooks/useAuth";
+import {
+  fetchAdminDashboard,
+  fetchAdminOutbox,
+  runAdminJobs,
+  type AdminStats,
+  type OutboxRecord,
+} from "../../../services/admin";
 
 const ACCENT_FROM = "#0EA5E9";
 const ACCENT_TO = "#38BDF8";
@@ -12,13 +19,6 @@ type User = {
   lastName?: string | null;
   phone?: string | null;
   role: string;
-};
-
-type PlatformStats = {
-  totalUsers: number;
-  totalBusinesses: number;
-  totalProviders: number;
-  totalBookingsThisMonth: number;
 };
 
 type NavItem = {
@@ -35,51 +35,75 @@ const navItems: NavItem[] = [
   { label: "Reports", icon: "▣" },
 ];
 
-const signups = [
-  {
-    name: "Riverside Wellness",
-    type: "Business",
-    date: "Today, 09:12",
-    status: "Pending",
-  },
-  {
-    name: "Amanda Cele",
-    type: "Sole provider",
-    date: "Today, 08:47",
-    status: "Approved",
-  },
-  {
-    name: "Thabo Mokoena",
-    type: "Customer",
-    date: "Yesterday, 17:20",
-    status: "Approved",
-  },
-  {
-    name: "Bright Smiles Dental",
-    type: "Business",
-    date: "Yesterday, 14:05",
-    status: "Approved",
-  },
-];
-
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user: authUser, loading, logout } = useAuth();
 
   const [activeItem, setActiveItem] = useState("Dashboard");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [stats] = useState<PlatformStats>({
-    totalUsers: 0,
-    totalBusinesses: 0,
-    totalProviders: 0,
-    totalBookingsThisMonth: 0,
-  });
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [outbox, setOutbox] = useState<OutboxRecord[]>([]);
+  const [outboxPage, setOutboxPage] = useState(1);
+  const [outboxTotalPages, setOutboxTotalPages] = useState(0);
+  const [loadingDashboard, setLoadingDashboard] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [dashboardRetry, setDashboardRetry] = useState(0);
+  const [jobRunning, setJobRunning] = useState(false);
+  const [jobResult, setJobResult] = useState<string | null>(null);
+  const [jobError, setJobError] = useState<string | null>(null);
 
   const handleLogout = async () => {
     await logout();
   };
 
   const user = authUser as User | null;
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([fetchAdminDashboard(), fetchAdminOutbox(outboxPage, 10)])
+      .then(([dashboard, messages]) => {
+        if (!active) return;
+        setStats(dashboard.stats);
+        setOutbox(messages.items);
+        setOutboxTotalPages(messages.pagination.totalPages);
+        setDashboardError(null);
+      })
+      .catch((reason: unknown) => {
+        if (active) {
+          setDashboardError(
+            reason instanceof Error
+              ? reason.message
+              : "Admin data could not be loaded."
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoadingDashboard(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [outboxPage, dashboardRetry]);
+
+  const handleRunJobs = async () => {
+    setJobRunning(true);
+    setJobResult(null);
+    setJobError(null);
+    try {
+      const result = await runAdminJobs();
+      setJobResult(
+        `Attempted ${result.attempted}; accepted ${result.accepted}; failed ${result.failed}.`
+      );
+    } catch (reason: unknown) {
+      setJobError(
+        reason instanceof Error
+          ? reason.message
+          : "The manual reminder job could not be run."
+      );
+    } finally {
+      setJobRunning(false);
+    }
+  };
 
   if (loading || !user) {
     return (
@@ -293,147 +317,166 @@ export default function AdminDashboard() {
           <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               title="Total users"
-              value={stats.totalUsers}
+              value={stats?.totalUsers ?? 0}
               subtitle="Customers, providers & staff"
               icon="♙"
             />
 
             <StatCard
               title="Businesses"
-              value={stats.totalBusinesses}
+              value={stats?.totalBusinesses ?? 0}
               subtitle="Registered on the platform"
               icon="◈"
             />
 
             <StatCard
               title="Sole providers"
-              value={stats.totalProviders}
+              value={stats?.totalProviders ?? 0}
               subtitle="Active provider accounts"
               icon="◷"
             />
 
             <StatCard
               title="Bookings this month"
-              value={stats.totalBookingsThisMonth}
+              value={stats?.totalBookingsThisMonth ?? 0}
               subtitle="Across all accounts"
               icon="▣"
             />
           </section>
 
-          {/* Main grid */}
-          <div className="grid gap-6 xl:grid-cols-3">
-            {/* Recent signups */}
-            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm xl:col-span-2">
-              <div className="flex items-center justify-between border-b border-slate-100 p-5">
-                <div>
-                  <h2 className="font-bold">Recent signups</h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    New accounts across the platform
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => setActiveItem("Users")}
-                  className="text-sm font-semibold hover:underline"
-                  style={{ color: ACCENT_FROM }}
-                >
-                  View all
-                </button>
-              </div>
-
-              <div className="divide-y divide-slate-100">
-                {signups.map((signup) => (
-                  <div
-                    key={`${signup.name}-${signup.date}`}
-                    className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-50 text-sm font-semibold text-sky-700">
-                        {signup.name
-                          .split(" ")
-                          .map((word) => word[0])
-                          .join("")
-                          .slice(0, 2)}
-                      </div>
-
-                      <div>
-                        <p className="font-semibold">{signup.name}</p>
-                        <p className="text-sm text-slate-500">
-                          {signup.type} · {signup.date}
-                        </p>
-                      </div>
-                    </div>
-
-                    <span
-                      className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${
-                        signup.status === "Pending"
-                          ? "bg-amber-50 text-amber-700"
-                          : "bg-emerald-50 text-emerald-700"
-                      }`}
-                    >
-                      {signup.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Platform health */}
-            <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-100 p-5">
-                <h2 className="font-bold">Platform health</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Current system status
-                </p>
-              </div>
-
-              <div className="divide-y divide-slate-100">
-                <HealthRow label="API" status="Operational" />
-                <HealthRow label="Payments" status="Operational" />
-                <HealthRow label="Notifications" status="Operational" />
-                <HealthRow label="Pending approvals" status="1 waiting" tone="amber" />
-              </div>
-            </section>
-          </div>
-
-          {/* Quick actions */}
-          <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <QuickAction
-              icon="♙"
-              label="Manage users"
-              description="Search, edit and suspend user accounts."
-              onClick={() => setActiveItem("Users")}
-            />
-
-            <QuickAction
-              icon="◈"
-              label="Manage businesses"
-              description="Review and approve business accounts."
-              onClick={() => setActiveItem("Businesses")}
-            />
-
-            <QuickAction
-              icon="◇"
-              label="Subscriptions"
-              description="View plans, billing and upgrades."
-              onClick={() => setActiveItem("Subscriptions")}
-            />
-
-            <QuickAction
-              icon="▣"
-              label="Reports"
-              description="Platform-wide bookings and revenue reports."
-              onClick={() => setActiveItem("Reports")}
-            />
-          </section>
-
-          {/* Current section indicator */}
-          {activeItem !== "Dashboard" && (
-            <div className="mt-6 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
-              <strong>{activeItem}</strong> section selected. The detailed{" "}
-              {activeItem.toLowerCase()} page can be connected next.
+          {loadingDashboard && (
+            <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
+              Loading admin data...
             </div>
           )}
+
+          {dashboardError && (
+            <div className="mb-6 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
+              <span>{dashboardError}</span>
+              <button
+                type="button"
+                onClick={() => setDashboardRetry((prev) => prev + 1)}
+                className="rounded-lg border border-red-300 px-3 py-2 font-semibold"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Sent messages */}
+          <section className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-bold">Sent messages</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Notification delivery records from the server
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleRunJobs}
+                disabled={jobRunning}
+                className="rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {jobRunning ? "Running jobs..." : "Run jobs now"}
+              </button>
+            </div>
+
+            {jobResult && (
+              <div className="mx-5 mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+                {jobResult}
+              </div>
+            )}
+            {jobError && (
+              <div className="mx-5 mt-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {jobError}
+              </div>
+            )}
+
+            {outbox.length === 0 ? (
+              <div className="p-8 text-center text-sm text-slate-500">
+                {loadingDashboard
+                  ? "Loading notification records..."
+                  : "No notification records found."}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-5 py-3">Kind</th>
+                      <th className="px-5 py-3">Recipient</th>
+                      <th className="px-5 py-3">Status</th>
+                      <th className="px-5 py-3">Attempts</th>
+                      <th className="px-5 py-3">Updated</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {outbox.map((record) => (
+                      <tr key={record.id}>
+                        <td className="px-5 py-4 font-medium text-slate-800">
+                          {record.kind}
+                        </td>
+                        <td className="px-5 py-4 text-slate-600">
+                          {record.recipient}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              record.status === "SENT"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : record.status === "FAILED"
+                                ? "bg-red-50 text-red-700"
+                                : record.status === "PENDING" ||
+                                  record.status === "PROCESSING"
+                                ? "bg-amber-50 text-amber-700"
+                                : "bg-slate-100 text-slate-700"
+                            }`}
+                          >
+                            {record.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-slate-600">
+                          {record.attempts}
+                        </td>
+                        <td className="px-5 py-4 text-slate-600">
+                          {new Date(record.updatedAt).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {outboxTotalPages > 1 && (
+              <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 text-sm">
+                <button
+                  type="button"
+                  disabled={outboxPage <= 1}
+                  onClick={() =>
+                    setOutboxPage((page) => Math.max(1, page - 1))
+                  }
+                  className="rounded-lg border px-3 py-2 disabled:opacity-40"
+                >
+                  Previous
+                </button>
+                <span className="text-slate-500">
+                  Page {outboxPage} of {outboxTotalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={outboxPage >= outboxTotalPages}
+                  onClick={() =>
+                    setOutboxPage((page) => Math.min(outboxTotalPages, page + 1))
+                  }
+                  className="rounded-lg border px-3 py-2 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </section>
         </div>
 
         {/* Footer */}
@@ -490,58 +533,5 @@ function StatCard({
         </div>
       </div>
     </div>
-  );
-}
-
-function HealthRow({
-  label,
-  status,
-  tone = "green",
-}: {
-  label: string;
-  status: string;
-  tone?: "green" | "amber";
-}) {
-  return (
-    <div className="flex items-center justify-between p-5">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
-
-      <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-        <span
-          className={`h-2.5 w-2.5 rounded-full ${
-            tone === "amber" ? "bg-amber-500" : "bg-emerald-500"
-          }`}
-        />
-        {status}
-      </span>
-    </div>
-  );
-}
-
-function QuickAction({
-  icon,
-  label,
-  description,
-  onClick,
-}: {
-  icon: string;
-  label: string;
-  description: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"
-    >
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-lg text-sky-700">
-        {icon}
-      </div>
-
-      <h3 className="mt-4 font-semibold text-slate-900">{label}</h3>
-
-      <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
-    </button>
   );
 }
