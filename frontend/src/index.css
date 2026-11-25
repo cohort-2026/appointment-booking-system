@@ -186,7 +186,7 @@
   background: transparent !important;
 }
 
-.business-page-content > .business-legacy-page > aside,
+
 .business-page-content > .business-legacy-page > .business-mobile-overlay {
   display: none !important;
 }
@@ -197,4 +197,15 @@
 
 .business-page-content > .business-legacy-page > main > header {
   display: none !important;
+}
+
+/* Suppress page-local chrome only on pages that still render a legacy sidebar. */
+.dashboard-shell-content > div:has(> aside) > aside,
+.dashboard-shell-content > div:has(> aside) > .business-mobile-overlay,
+.dashboard-shell-content > div:has(> aside) > main > header {
+  display: none !important;
+}
+
+.dashboard-shell-content > div:has(> aside) > main {
+  padding-left: 0 !important;
 }

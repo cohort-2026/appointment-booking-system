@@ -105,7 +105,6 @@ export function buildAppointmentConfirmationEmail(input: AppointmentConfirmation
   }).format(input.startsAt);
   const status = input.status.replaceAll("_", " ");
   const details: Array<[string, string]> = [
-    ["Reference", input.appointmentId],
     ["Status", status],
     ["Service", input.serviceName],
     ["Provider", input.providerName],
@@ -115,8 +114,8 @@ export function buildAppointmentConfirmationEmail(input: AppointmentConfirmation
   ];
   return {
     subject: `Appointment confirmed: ${input.serviceName}`,
-    text: `Hi ${input.firstName}, your appointment has been saved.\n${details.map(([label, value]) => `${label}: ${value}`).join("\n")}\nView your saved appointment: ${input.appointmentUrl}`,
-    html: `<p>Hi ${escapeHtml(input.firstName)},</p><p>Your appointment has been saved.</p><ul>${details.map(([label, value]) => `<li><strong>${label}:</strong> ${escapeHtml(value)}</li>`).join("")}</ul><p><a href="${escapeHtml(input.appointmentUrl)}">View your saved appointment</a></p>`,
+    text: `Hi ${input.firstName}, your appointment has been saved.\n${details.map(([label, value]) => `${label}: ${value}`).join("\n")}\nOpen My Appointments: ${input.appointmentUrl}`,
+    html: `<p>Hi ${escapeHtml(input.firstName)},</p><p>Your appointment has been saved.</p><ul>${details.map(([label, value]) => `<li><strong>${label}:</strong> ${escapeHtml(value)}</li>`).join("")}</ul><p><a href="${escapeHtml(input.appointmentUrl)}">Open My Appointments</a></p>`,
   };
 }
 
@@ -177,8 +176,8 @@ export async function sendAppointmentChangeEmail(input: {
     : `Your ${input.serviceName} appointment moved from ${previous} to ${format.format(input.startsAt)} (SAST).`;
   await sendEmail(
     input.to, subject,
-    `Hi ${input.firstName}, ${summary}\nView your saved appointment: ${input.appointmentUrl}`,
-    `<p>Hi ${escapeHtml(input.firstName)},</p><p>${escapeHtml(summary)}</p><p><a href="${escapeHtml(input.appointmentUrl)}">View your saved appointment</a></p>`,
+    `Hi ${input.firstName}, ${summary}\nOpen My Appointments: ${input.appointmentUrl}`,
+    `<p>Hi ${escapeHtml(input.firstName)},</p><p>${escapeHtml(summary)}</p><p><a href="${escapeHtml(input.appointmentUrl)}">Open My Appointments</a></p>`,
     appointmentCalendar({
       id: input.appointmentId,
       startsAt: input.startsAt,
@@ -207,8 +206,8 @@ export async function sendAppointmentReminderEmail(input: {
   await sendEmail(
     input.to,
     `Appointment reminder: ${input.serviceName}`,
-    `Hi ${input.firstName}, ${sentence}\nView your booking: ${input.appointmentUrl}`,
-    `<p>Hi ${escapeHtml(input.firstName)},</p><p>${escapeHtml(sentence)}</p><p><a href="${escapeHtml(input.appointmentUrl)}">View your booking</a></p>`,
+    `Hi ${input.firstName}, ${sentence}\nOpen My Appointments: ${input.appointmentUrl}`,
+    `<p>Hi ${escapeHtml(input.firstName)},</p><p>${escapeHtml(sentence)}</p><p><a href="${escapeHtml(input.appointmentUrl)}">Open My Appointments</a></p>`,
   );
 }
 
@@ -220,7 +219,6 @@ export async function sendAppointmentScheduleAlert(input: {
   startsAt: Date;
   serviceName: string;
   providerName: string;
-  appointmentId: string;
 }): Promise<void> {
   const time = new Intl.DateTimeFormat("en-ZA", {
     dateStyle: "long", timeStyle: "short", timeZone: "Africa/Johannesburg",
@@ -233,7 +231,7 @@ export async function sendAppointmentScheduleAlert(input: {
   const schedule = input.change === "RESCHEDULED" && input.previousStart
     ? `Moved from ${time.format(input.previousStart)} (SAST) to ${time.format(input.startsAt)} (SAST).`
     : `${time.format(input.startsAt)} (SAST).`;
-  const lines = [`${input.serviceName} with ${input.providerName}`, schedule, `Reference: ${input.appointmentId}`];
+  const lines = [`${input.serviceName} with ${input.providerName}`, schedule];
   await sendEmail(
     input.to, subject, lines.join("\n"),
     lines.map(line => `<p>${escapeHtml(line)}</p>`).join(""),

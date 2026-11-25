@@ -15,21 +15,23 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [form, setForm] = useState<ProfileForm>({
+  const savedProfile = {
     firstName: user?.firstName ?? "",
     lastName: user?.lastName ?? "",
     phone: user?.phone ?? "",
-  });
+  };
+  const [form, setForm] = useState<ProfileForm>(savedProfile);
+
+  function startEditing() {
+    setForm(savedProfile);
+    setNotice(null);
+    setEditing(true);
+  }
 
   const name = user ? `${user.firstName} ${user.lastName ?? ""}`.trim() : "Customer";
   const initials = name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 
   function cancelEditing() {
-    setForm({
-      firstName: user?.firstName ?? "",
-      lastName: user?.lastName ?? "",
-      phone: user?.phone ?? "",
-    });
     setError(null);
     setNotice(null);
     setEditing(false);
@@ -42,7 +44,7 @@ export default function Profile() {
     setNotice(null);
 
     try {
-      const response = await apiFetch<{ success: boolean; user: NonNullable<typeof user> }>("/customer/profile", {
+      const response = await apiFetch<{ success: boolean; user: NonNullable<typeof user> }>("/auth/me", {
         method: "PATCH",
         body: JSON.stringify({
           firstName: form.firstName.trim(),
@@ -74,16 +76,16 @@ export default function Profile() {
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-col gap-5 border-b border-slate-100 bg-gradient-to-r from-sky-50 to-white p-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-5"><span className="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-sky-400 to-sky-600 text-xl font-bold text-white">{initials || "C"}</span><div><h2 className="text-xl font-bold">{name}</h2><p className="mt-1 text-sm text-slate-500">Customer account</p></div></div>
-        {!editing && <button type="button" onClick={() => { setNotice(null); setEditing(true); }} className="inline-flex w-fit items-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700">Edit profile</button>}
+        {!editing && <button type="button" onClick={startEditing} className="inline-flex w-fit items-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700">Edit profile</button>}
       </div>
       {editing ? (
         <form onSubmit={saveProfile} className="p-6">
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="text-sm font-medium text-slate-700">First name
-              <input required maxLength={100} value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100" />
+              <input required maxLength={50} value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100" />
             </label>
             <label className="text-sm font-medium text-slate-700">Last name
-              <input maxLength={100} value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100" />
+              <input maxLength={80} value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100" />
             </label>
             <label className="text-sm font-medium text-slate-700">Phone number
               <input type="tel" maxLength={30} value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100" />

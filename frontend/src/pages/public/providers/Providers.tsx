@@ -4,10 +4,18 @@ import { fetchProviders } from "../../../services/providers";
 import type { Provider } from "../../../types/providers";
 
 const PROVIDERS_PER_PAGE = 6;
+type ProviderTypeFilter = "ALL" | Provider["kind"];
+
+const providerTypeFilters: { label: string; value: ProviderTypeFilter }[] = [
+  { label: "All providers", value: "ALL" },
+  { label: "Sole providers", value: "SOLE_PROVIDER" },
+  { label: "Businesses", value: "BUSINESS" },
+];
 
 export default function Providers() {
   const [providers, setProviders] = useState<Provider[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedType, setSelectedType] = useState<ProviderTypeFilter>("ALL");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -29,30 +37,36 @@ export default function Providers() {
     return [
       "All",
       ...Array.from(
-        new Set(providers.map((provider) => provider.category))
+        new Set(
+          providers
+            .filter((provider) => selectedType === "ALL" || provider.kind === selectedType)
+            .map((provider) => provider.category),
+        ),
       ),
     ];
-  }, [providers]);
+  }, [providers, selectedType]);
 
   const filteredProviders = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
 
     return providers.filter((provider) => {
-      const matchesSearch =
-        provider.name.toLowerCase().includes(query) ||
-        provider.category.toLowerCase().includes(query) ||
-        provider.description.toLowerCase().includes(query) ||
-        provider.services.some((service) =>
-          service.name.toLowerCase().includes(query)
-        );
+      const matchesSearch = [
+        provider.name,
+        provider.category,
+        provider.description,
+        provider.city ?? "",
+        provider.kind === "BUSINESS" ? "business" : "sole provider independent provider",
+        ...provider.services.map((service) => service.name),
+      ].some((value) => value.toLowerCase().includes(query));
 
+      const matchesType = selectedType === "ALL" || provider.kind === selectedType;
       const matchesCategory =
         selectedCategory === "All" ||
         provider.category === selectedCategory;
 
-      return matchesSearch && matchesCategory;
+      return matchesSearch && matchesType && matchesCategory;
     });
-  }, [providers, searchQuery, selectedCategory]);
+  }, [providers, searchQuery, selectedType, selectedCategory]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProviders.length / PROVIDERS_PER_PAGE));
 
@@ -63,7 +77,9 @@ export default function Providers() {
 
   function clearFilters() {
     setSearchQuery("");
+    setSelectedType("ALL");
     setSelectedCategory("All");
+    setCurrentPage(1);
   }
 
   return (
@@ -84,7 +100,7 @@ export default function Providers() {
         </div>
       </section>
 
-      {/* Search and category filters */}
+      {/* Search and discovery filters */}
       <section className="bg-white">
         <div className="mx-auto max-w-7xl px-6 py-8 lg:px-8">
           <div className="flex flex-col gap-6">
@@ -103,17 +119,52 @@ export default function Providers() {
 
               <input
                 type="search"
+                aria-label="Search providers, services, or locations"
                 value={searchQuery}
                 onChange={(event) => {
                   setSearchQuery(event.target.value);
                   setCurrentPage(1);
                 }}
-                placeholder="Search providers or services..."
+                placeholder="Search by provider, service, category, or location..."
                 className="w-full rounded-xl border border-slate-300 bg-white py-3.5 pl-12 pr-4 text-sm text-[#334155] outline-none transition focus:border-[#0EA5E9] focus:ring-4 focus:ring-sky-100 placeholder:text-slate-400"
               />
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Provider type</p>
+              <div className="flex flex-wrap gap-2" aria-label="Filter by provider type">
+                {providerTypeFilters.map(({ label, value }) => {
+                  const isSelected = selectedType === value;
+
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={isSelected}
+                      onClick={() => {
+                        setSelectedType(value);
+                        setSelectedCategory("All");
+                        setCurrentPage(1);
+                      }}
+                      className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                        isSelected
+                          ? "bg-slate-900 text-white"
+                          : "border border-slate-200 bg-white text-[#334155] hover:border-slate-400"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-sm text-slate-500">
+                Sole providers work independently with you. Businesses offer services through a team or location.
+              </p>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Category</p>
+              <div className="flex flex-wrap gap-2">
               {categories.map((category) => {
                 const isSelected = selectedCategory === category;
 
@@ -121,6 +172,7 @@ export default function Providers() {
                   <button
                     key={category}
                     type="button"
+                    aria-pressed={isSelected}
                     onClick={() => {
                       setSelectedCategory(category);
                       setCurrentPage(1);
@@ -135,6 +187,7 @@ export default function Providers() {
                   </button>
                 );
               })}
+              </div>
             </div>
           </div>
         </div>
@@ -148,7 +201,11 @@ export default function Providers() {
           <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-2xl font-semibold text-[#0F172A]">
-                Available providers
+                {selectedType === "BUSINESS"
+                  ? "Available businesses"
+                  : selectedType === "SOLE_PROVIDER"
+                    ? "Independent sole providers"
+                    : "Available providers"}
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
@@ -157,7 +214,7 @@ export default function Providers() {
               </p>
             </div>
 
-            {(searchQuery || selectedCategory !== "All") && (
+            {(searchQuery || selectedType !== "ALL" || selectedCategory !== "All") && (
               <button
                 type="button"
                 onClick={clearFilters}
@@ -238,20 +295,29 @@ function ProviderCard({ provider }: { provider: Provider }) {
           {provider.initials}
         </div>
 
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
-            isOpen
-              ? "bg-green-50 text-[#22C55E]"
-              : "bg-slate-100 text-slate-500"
-          }`}
-        >
+        <div className="flex flex-col items-end gap-2">
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+            provider.kind === "BUSINESS"
+              ? "bg-violet-50 text-violet-700"
+              : "bg-sky-50 text-sky-700"
+          }`}>
+            {provider.kind === "BUSINESS" ? "Business" : "Sole provider"}
+          </span>
           <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              isOpen ? "bg-[#22C55E]" : "bg-slate-400"
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+              isOpen
+                ? "bg-green-50 text-[#22C55E]"
+                : "bg-slate-100 text-slate-500"
             }`}
-          />
-          {provider.status}
-        </span>
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                isOpen ? "bg-[#22C55E]" : "bg-slate-400"
+              }`}
+            />
+            {provider.status}
+          </span>
+        </div>
       </div>
 
       <div className="mt-6 flex-1">
@@ -261,6 +327,12 @@ function ProviderCard({ provider }: { provider: Provider }) {
 
         <p className="mt-1 text-sm font-medium text-[#0EA5E9]">
           {provider.category}
+        </p>
+
+        <p className="mt-2 text-xs font-medium text-slate-500">
+          {provider.kind === "BUSINESS"
+            ? "Team-based services at a business location"
+            : "Book directly with an independent provider"}
         </p>
 
         <p className="mt-4 line-clamp-3 text-sm leading-7 text-[#334155]">

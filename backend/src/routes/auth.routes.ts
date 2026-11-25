@@ -8,6 +8,7 @@ import {
   login,
   logout,
   getMe,
+  updateMe,
   verifyOtp,
   resendOtp,
   forgotPassword,
@@ -34,6 +35,7 @@ router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
 
 router.get("/me", authenticate, getMe);
+router.patch("/me", authenticate, updateMe);
 
 router.get(
   "/customer-test",

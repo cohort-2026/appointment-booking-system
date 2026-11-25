@@ -44,7 +44,7 @@ async function setup({loggedIn=false,kind='business',width=1280,conflict=false}=
     }
     if(path==='/api/customer/appointments/saved-appointment'){
       details++;if(failDetail){failDetail=false;return json({message:'Temporarily unavailable'},503);}
-      return json({success:true,appointment:{id:'saved-appointment',time:savedStart,endsAt:new Date(Date.parse(savedStart)+120*60_000).toISOString(),service:'Consultation',durationMinutes:120,price:'300',status:'CONFIRMED',timeZone:'Africa/Johannesburg',customerNotes:savedNotes,providerName:provider(kind).name,providerId:provider(kind).id,staffName:kind==='business'?'Sam Staff':null,address:'Johannesburg',phone:null,cancellationCutoffHours:24,changeDeadline:new Date(Date.parse(savedStart)-24*3_600_000).toISOString()}});
+      return json({success:true,appointment:{id:'saved-appointment',calendarUid:'fixture-calendar-uid@itthynkappoint',time:savedStart,endsAt:new Date(Date.parse(savedStart)+120*60_000).toISOString(),service:'Consultation',durationMinutes:120,price:'300',status:'CONFIRMED',timeZone:'Africa/Johannesburg',customerNotes:savedNotes,providerName:provider(kind).name,providerId:provider(kind).id,staffName:kind==='business'?'Sam Staff':null,address:'Johannesburg',phone:null,cancellationCutoffHours:24,changeDeadline:new Date(Date.parse(savedStart)-24*3_600_000).toISOString()}});
     }
     return json({message:`Unexpected test API: ${path}`},404);
   });
@@ -53,7 +53,7 @@ async function setup({loggedIn=false,kind='business',width=1280,conflict=false}=
 async function pick(page,kind){
   await page.getByRole('button',{name:/Consultation/}).click();await page.getByRole('button',{name:'Choose a time',exact:true}).click();
   await page.getByLabel('Choose a date').fill(date);
-  if(kind==='business')await page.getByLabel('Choose a staff member',{exact:true}).selectOption('staff-1');
+  if(kind==='business')await page.getByRole('combobox',{name:/Choose a staff member/}).selectOption('staff-1');
   await page.getByRole('button',{name:'09:00 SAST',exact:true}).click();await page.getByRole('button',{name:'Review booking'}).click();
 }
 try{
@@ -69,13 +69,18 @@ try{
   await p.getByRole('button',{name:'Confirm appointment',exact:true}).click();await expect(p).toHaveURL(/dashboard\/customer\/appointments\/saved-appointment/);
   await expect(p.getByRole('heading',{name:'Appointment confirmed'})).toBeVisible();await expect(p.getByText('Please call on arrival',{exact:true})).toBeVisible();
   await p.reload();await expect(p.getByRole('heading',{name:'Appointment confirmed'})).toBeVisible();assert.ok(guest.details>=2);assert.equal(guest.creates,2);
-  const download=p.waitForEvent('download');await p.getByRole('button',{name:'Add to calendar'}).click();assert.ok((await download).suggestedFilename().endsWith('.ics'));
+  const download=p.waitForEvent('download');await p.getByRole('button',{name:'Add to calendar'}).click();
+  const calendarDownload=await download;
+  assert.equal(calendarDownload.suggestedFilename(),'appointment.ics');
+  const calendar=await readFile(await calendarDownload.path(),'utf8');
+  assert.match(calendar,/UID:fixture-calendar-uid@itthynkappoint/);
+  assert.ok(!calendar.includes('saved-appointment'));
   if(process.env.UI_SCREENSHOT_DIR)await p.screenshot({path:`${process.env.UI_SCREENSHOT_DIR}/desktop.png`,fullPage:true});
   assert.deepEqual(guest.errors,[]);await guest.context.close();checks++;console.log('PASS public closed provider → inline login → conflict recovery → saved confirmation/refresh/calendar');
 
   const mobile=await setup({loggedIn:true,kind:'sole',width:390});const m=mobile.page;
   await m.goto(`${origin}/dashboard/customer/book`);await m.getByRole('link',{name:/View provider/}).click();await expect(m).toHaveURL(/dashboard\/customer\/book\/sole/);
-  await pick(m,'sole');await expect(m.getByLabel('Choose a staff member',{exact:true})).toHaveCount(0);
+  await pick(m,'sole');await expect(m.getByRole('combobox',{name:/Choose a staff member/})).toHaveCount(0);
   assert.ok(await m.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
   if(process.env.UI_SCREENSHOT_DIR)await m.screenshot({path:`${process.env.UI_SCREENSHOT_DIR}/mobile-review.png`,fullPage:true});
   await m.getByRole('button',{name:'Confirm appointment',exact:true}).click();await expect(m.getByRole('heading',{name:'Appointment confirmed'})).toBeVisible();

@@ -1,3 +1,4 @@
+import { appointmentCalendarUid } from "../lib/appointment-calendar.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import { bookedDurationMinutes, bookedPrice } from "../lib/booking-snapshot.js";
 import prisma from "../lib/prisma.js";
@@ -21,7 +22,7 @@ export async function findCustomerAppointment(owner: Owner, db: Prisma.Transacti
 export function customerAppointmentDetails(appointment: CustomerAppointment) {
   const { soleProvider, business, staff } = appointment;
   return {
-    id: appointment.id, time: appointment.scheduledStart, endsAt: appointment.scheduledEnd,
+    id: appointment.id, calendarUid: appointmentCalendarUid(appointment.id), time: appointment.scheduledStart, endsAt: appointment.scheduledEnd,
     service: appointment.service.name, durationMinutes: bookedDurationMinutes(appointment),
     price: bookedPrice(appointment)?.toString() ?? null, status: appointment.status,
     timeZone: BOOKING_TIME_ZONE, customerNotes: appointment.customerNotes,

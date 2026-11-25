@@ -51,7 +51,7 @@ export type AppointmentEvent = {
 };
 
 export type SavedAppointment = {
-  id: string; time: string; endsAt: string | null; service: string; durationMinutes: number;
+  id: string; calendarUid?: string; time: string; endsAt: string | null; service: string; durationMinutes: number;
   price: string | null; status: string; timeZone: string; customerNotes: string | null;
   providerName: string; providerId: string | null; staffName: string | null;
   address: string | null; phone: string | null; cancellationCutoffHours: number; changeDeadline: string;
