@@ -133,7 +133,7 @@ try {
   const token=id=>jwt.sign({userId:id,role:'CUSTOMER'},process.env.JWT_SECRET);
   await check('saved detail is direct, ownership-checked and excludes internal tokens',async()=>{
     const r=await fetch(`${origin}/api/customer/appointments/${booked.id}`,{headers:{authorization:`Bearer ${token('c1')}`}});assert.equal(r.status,200);
-    const {appointment}=await r.json();assert.equal(appointment.price,'300');assert.equal(appointment.durationMinutes,120);assert.equal(appointment.customerNotes,'Please call on arrival');assert.equal('manageTokenHash' in appointment,false);
+    const {appointment}=await r.json();assert.equal(appointment.price,'300');assert.equal(appointment.durationMinutes,120);assert.match(appointment.calendarUid,/^[A-Za-z0-9_-]{43}@itthynkappoint$/);assert.ok(!appointment.calendarUid.includes(booked.id));assert.equal(appointment.customerNotes,'Please call on arrival');assert.equal('manageTokenHash' in appointment,false);
     assert.equal((await fetch(`${origin}/api/customer/appointments/${booked.id}`,{headers:{authorization:`Bearer ${token('c2')}`}})).status,404);
     assert.equal((await fetch(`${origin}/api/customer/appointments/${booked.id}`)).status,401);
   });
@@ -288,7 +288,8 @@ try {
     assert.equal(outcomes.reduce((total, outcome) => total + outcome.accepted, 0), 1);
     assert.equal(sent.length, 1);
     assert.equal(sent[0].startsAt.toISOString(), start.toISOString());
-    assert.ok(sent[0].appointmentUrl.endsWith('/dashboard/customer/appointments/' + eligible.id));
+    assert.equal(new URL(sent[0].appointmentUrl).pathname, '/dashboard/customer/appointments');
+    assert.ok(!sent[0].appointmentUrl.includes(eligible.id));
     assert.equal((await sendTomorrowReminders(now, send)).accepted, 0);
   });
 

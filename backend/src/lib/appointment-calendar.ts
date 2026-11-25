@@ -1,3 +1,10 @@
+import { createHash } from "node:crypto";
+
+export function appointmentCalendarUid(appointmentId: string): string {
+  const digest = createHash("sha256").update(appointmentId).digest("base64url");
+  return `${digest}@itthynkappoint`;
+}
+
 /** A small .ics attachment that can be imported into a calendar app. */
 export function appointmentCalendar(input: {
   id: string;
@@ -18,7 +25,7 @@ export function appointmentCalendar(input: {
     "PRODID:-//ITThynkAppoint//Appointments//EN",
     `METHOD:${cancelled ? "CANCEL" : "PUBLISH"}`,
     "BEGIN:VEVENT",
-    `UID:${input.id}@itthynkappoint`,
+    `UID:${appointmentCalendarUid(input.id)}`,
     `DTSTAMP:${stamp(new Date())}`,
     `DTSTART:${stamp(input.startsAt)}`,
     `DTEND:${stamp(input.endsAt)}`,
