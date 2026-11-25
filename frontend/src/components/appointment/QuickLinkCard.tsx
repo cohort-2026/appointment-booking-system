@@ -18,8 +18,8 @@ export function QuickLinkCard({ to, icon, title, description, className }: Quick
         className
       )}
     >
-      <span 
-        aria-hidden="true" 
+      <span
+        aria-hidden="true"
         className="grid h-11 w-11 place-items-center rounded-xl bg-sky-50 text-lg text-sky-700 transition-colors group-hover:bg-sky-100"
       >
         {icon}

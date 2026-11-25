@@ -15,7 +15,7 @@ export type AppointmentStatus = keyof typeof statusMap
 export function StatusBadge({ status }: { status: AppointmentStatus }) {
   // Fallback to cancelled style if the backend sends an unexpected status
   const styles = statusMap[status] || statusMap.cancelled
-  
+
   return (
     <Badge variant="outline" className={cn("capitalize", styles)}>
       {status.replaceAll("-", " ")}

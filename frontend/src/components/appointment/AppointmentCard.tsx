@@ -21,11 +21,11 @@ interface AppointmentCardProps {
   className?: string
 }
 
-export function AppointmentCard({ 
-  appointment, 
-  href, 
+export function AppointmentCard({
+  appointment,
+  href,
   variant = "list",
-  className 
+  className
 }: AppointmentCardProps) {
   // Format the time consistently using SAST
   const formattedTime = new Intl.DateTimeFormat("en-ZA", {
@@ -43,21 +43,21 @@ export function AppointmentCard({
       <div className={cn("grid gap-5 p-5 sm:grid-cols-2 sm:p-6", className)}>
         <DetailField label="Service" value={appointment.service} />
         <DetailField label="Provider" value={appointment.providerName} />
-        
+
         {appointment.staffName && (
           <DetailField
             label="Assigned staff"
             value={`${appointment.staffName}${appointment.staffTitle ? ` · ${appointment.staffTitle}` : ""}`}
           />
         )}
-        
+
         <DetailField label="Date and time" value={`${formattedTime} SAST`} />
         <DetailField label="Duration" value={`${appointment.durationMinutes} minutes`} />
-        
+
         {appointment.price !== null && (
           <DetailField label="Price" value={`R${appointment.price}`} />
         )}
-        
+
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p>
           <div className="mt-1">
@@ -80,19 +80,19 @@ export function AppointmentCard({
       <div>
         <p className="font-semibold">{appointment.service}</p>
         <p className="mt-1 text-sm text-slate-500">with {appointment.providerName}</p>
-        
+
         {appointment.staffName && (
           <p className="mt-1 text-sm text-slate-500">
             Staff: {appointment.staffName}{appointment.staffTitle ? ` · ${appointment.staffTitle}` : ""}
           </p>
         )}
-        
+
         <p className="mt-1 text-sm text-slate-500">
           Duration: {appointment.durationMinutes} minutes
           {appointment.price !== null ? ` · Price: R${appointment.price}` : ""}
         </p>
       </div>
-      
+
       <div className="flex items-center justify-between gap-4 sm:justify-end">
         <p className="text-sm font-medium text-slate-600">{formattedTime} SAST</p>
         <StatusBadge status={status} />
