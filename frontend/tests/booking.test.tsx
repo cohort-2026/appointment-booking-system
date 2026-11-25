@@ -2,8 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { AuthProvider } from '../src/context/AuthContext';
-import AppRoutes from '../src/routes/AppRoutes';
+import App from '../src/App';
 import { safeCustomerReturnPath, finishVerifiedBooking } from '../src/lib/bookingFlow';
 import { parseBookingDraft, saveBookingDraft } from '../src/lib/bookingDraft';
 const date=new Date(Date.now()+3*86_400_000+7_200_000).toISOString().slice(0,10);
@@ -14,12 +13,17 @@ let movedTo: string | null = null;
 let cancelled = false;
 let moveConflict = false;
 let insideCutoff = false;
+let dashboardForbidden = false;
 const cancellationReasons: string[] = [];
 const moveAttempts: string[] = [];
 function provider(){return {id:`${kind}:provider`,kind:kind==='business'?'BUSINESS':'SOLE_PROVIDER',name:'Test Studio',category:'Wellness',description:'Consultations',city:'Johannesburg',hours:'Mon-Sun 09:00-17:00',initials:'TS',status:'Closed',services:[{id:'service',name:'Consultation',description:'Full visit',duration:120,price:300,bookable:true}]};}
 function Location(){return <output data-testid="location">{useLocation().pathname}</output>;}
-function mount(path:string){return render(<MemoryRouter initialEntries={[path]}><AuthProvider><AppRoutes/><Location/></AuthProvider></MemoryRouter>);}
+function mount(path:string){return render(<MemoryRouter initialEntries={[path]}><App/><Location/></MemoryRouter>);}
 beforeEach(()=>{
+  vi.stubGlobal('matchMedia', (media: string) => ({
+    media, matches: false, addEventListener() {}, removeEventListener() {},
+  }));
+  dashboardForbidden = false;
   localStorage.clear();loggedIn=false;kind='business';posts=[];conflict=false;details=0;availabilityFails=false;
   movedTo=null;cancelled=false;moveConflict=false;insideCutoff=false;
   cancellationReasons.length=0;moveAttempts.length=0;
@@ -28,6 +32,10 @@ beforeEach(()=>{
     const json=(body:unknown,status=200)=>Promise.resolve(new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}}));
     if(path==='/api/auth/me')return json(loggedIn?{user:customer}:{message:'Signed out'},loggedIn?200:401);
     if(path==='/api/auth/login'){loggedIn=true;return json({user:customer});}
+    if(path==='/api/customer/dashboard') {
+      if (dashboardForbidden) return json({message:'You do not have permission to access this resource'},403);
+      return json({stats:{todayAppointments:0,upcomingAppointments:0,completedAppointments:0,cancelledAppointments:0},upcomingAppointments:[]});
+    }
     if(path==='/api/providers')return json({providers:[provider()]});
     if(path.endsWith('/availability')){
       if(availabilityFails)return json({message:'Availability unavailable'},503);
@@ -221,4 +229,18 @@ it('sends legacy management links to sign-in without loading a booking', async (
   await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/login'));
   expect(details).toBe(0);
   expect(screen.queryByText('legacy-token')).toBeNull();
+});
+
+it('shows a dashboard permission error and retries without manufacturing empty data', async () => {
+  loggedIn = true;
+  dashboardForbidden = true;
+  const user = userEvent.setup();
+  mount('/dashboard/customer');
+  expect((await screen.findByRole('alert')).textContent).toContain('You do not have permission');
+  expect(screen.queryByText('No upcoming appointments')).toBeNull();
+
+  dashboardForbidden = false;
+  await user.click(screen.getByRole('button', {name:'Try again'}));
+  await screen.findByText('No upcoming appointments');
+  expect(screen.queryByRole('alert')).toBeNull();
 });

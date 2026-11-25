@@ -194,22 +194,7 @@ export const createBusinessService = async (req: AuthenticatedRequest, res: Resp
       return res.status(400).json({ success: false, message: "One or more selected staff do not belong to this business" });
     }
     console.error("Business service creation error:", error);
-    const prismaError = error as { code?: string; message?: string };
-    if (prismaError.code === "P2002") {
-      return res.status(409).json({ success: false, message: "A service with these details already exists" });
-    }
-    if (prismaError.code === "P2003") {
-      return res.status(400).json({ success: false, message: "The business or selected staff could not be found" });
-    }
-    if (prismaError.code === "P2025") {
-      return res.status(404).json({ success: false, message: "The business or selected staff no longer exists" });
-    }
-    return res.status(500).json({
-      success: false,
-      message: process.env.NODE_ENV === "development" && prismaError.message
-        ? `Unable to create business service: ${prismaError.message}`
-        : "Unable to create business service",
-    });
+    return res.status(500).json({ success: false, message: "Unable to create business service" });
   }
 };
 

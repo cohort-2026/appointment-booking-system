@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "../../../hooks/useAuth"; 
-import { apiFetch, ApiError } from "../../../services/api";
+import { useAuth } from "../../../hooks/useAuth";
+import { apiFetch } from "../../../services/api";
 import { Calendar } from "lucide-react";
 
 import { StatCard } from "@/components/dashboard/StatCard"
@@ -69,41 +69,19 @@ export default function CustomerDashboard() {
   const { user } = useAuth();
   const location = useLocation();
   const bookedAppointmentId = new URLSearchParams(location.search).get("bookedAppointment");
-  
+
   const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [justBookedAppointment, setJustBookedAppointment] = useState<Appointment | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Memoized fetch function so we can call it from the Retry button
-  const fetchDashboard = () => {
+  const [retryCount, setRetryCount] = useState(0);
+
+  function retryDashboard() {
     setLoading(true);
     setError(null);
-    
-    void apiFetch<DashboardResponse>("/customer/dashboard")
-      .then((response) => {
-        setDashboard(response);
-      })
-      .catch((reason: unknown) => {
-        if (reason instanceof ApiError && reason.status === 403) {
-          setDashboard({
-            success: true,
-            stats: {
-              upcomingAppointments: 0,
-              todayAppointments: 0,
-              completedAppointments: 0,
-              cancelledAppointments: 0,
-            },
-            upcomingAppointments: [],
-          });
-          return;
-        }
-        setError(reason instanceof Error ? reason.message : "Dashboard information could not be loaded.");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  };
+    setRetryCount((count) => count + 1);
+  }
 
   useEffect(() => {
     let active = true;
@@ -113,19 +91,7 @@ export default function CustomerDashboard() {
       })
       .catch((reason: unknown) => {
         if (active) {
-          if (reason instanceof ApiError && reason.status === 403) {
-            setDashboard({
-              success: true,
-              stats: {
-                upcomingAppointments: 0,
-                todayAppointments: 0,
-                completedAppointments: 0,
-                cancelledAppointments: 0,
-            },
-              upcomingAppointments: [],
-            });
-            return;
-          }
+          setDashboard(null);
           setError(reason instanceof Error ? reason.message : "Dashboard information could not be loaded.");
         }
       })
@@ -135,7 +101,7 @@ export default function CustomerDashboard() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [retryCount]);
 
   useEffect(() => {
     if (!bookedAppointmentId) return;
@@ -186,9 +152,9 @@ export default function CustomerDashboard() {
 
         {/* Global Error State */}
         {error && (
-          <ErrorState 
-            message={error} 
-            onRetry={fetchDashboard} 
+          <ErrorState
+            message={error}
+            onRetry={retryDashboard}
           />
         )}
 
@@ -260,7 +226,7 @@ export default function CustomerDashboard() {
                   />
                 ))}
               </div>
-            ) : (
+            ) : dashboard ? (
               <EmptyState
                 icon={Calendar}
                 title="No upcoming appointments"
@@ -271,7 +237,7 @@ export default function CustomerDashboard() {
                   </Button>
                 }
               />
-            )}
+            ) : null}
           </CardContent>
         </Card>
       </div>

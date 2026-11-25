@@ -64,7 +64,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/manage/:token" element={<Navigate to="/dashboard/customer/appointments" replace />} />
-      
+
       {/* --- PUBLIC PAGES --- */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Home />} />
@@ -142,6 +142,7 @@ export default function AppRoutes() {
         <Route path="services" element={<Services />} />
         <Route path="appointments" element={<Appointments />} />
         <Route path="availability" element={<Availability />} />
+        <Route path="availability/edit" element={<Availability editMode />} />
         <Route path="profile" element={<ProviderProfilePage />} />
         <Route path="subscription" element={<ProviderPackage />} />
       </Route>

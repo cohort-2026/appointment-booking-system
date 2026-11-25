@@ -53,7 +53,7 @@ async function setup({loggedIn=false,kind='business',width=1280,conflict=false}=
 async function pick(page,kind){
   await page.getByRole('button',{name:/Consultation/}).click();await page.getByRole('button',{name:'Choose a time',exact:true}).click();
   await page.getByLabel('Choose a date').fill(date);
-  if(kind==='business')await page.getByLabel('Choose a staff member',{exact:true}).selectOption('staff-1');
+  if(kind==='business')await page.getByRole('combobox',{name:/Choose a staff member/}).selectOption('staff-1');
   await page.getByRole('button',{name:'09:00 SAST',exact:true}).click();await page.getByRole('button',{name:'Review booking'}).click();
 }
 try{
@@ -75,7 +75,7 @@ try{
 
   const mobile=await setup({loggedIn:true,kind:'sole',width:390});const m=mobile.page;
   await m.goto(`${origin}/dashboard/customer/book`);await m.getByRole('link',{name:/View provider/}).click();await expect(m).toHaveURL(/dashboard\/customer\/book\/sole/);
-  await pick(m,'sole');await expect(m.getByLabel('Choose a staff member',{exact:true})).toHaveCount(0);
+  await pick(m,'sole');await expect(m.getByRole('combobox',{name:/Choose a staff member/})).toHaveCount(0);
   assert.ok(await m.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
   if(process.env.UI_SCREENSHOT_DIR)await m.screenshot({path:`${process.env.UI_SCREENSHOT_DIR}/mobile-review.png`,fullPage:true});
   await m.getByRole('button',{name:'Confirm appointment',exact:true}).click();await expect(m.getByRole('heading',{name:'Appointment confirmed'})).toBeVisible();

@@ -54,13 +54,11 @@ export function AppLayout({ role }: { role: UserRole }) {
     staff: "/dashboard/staff/profile",
     admin: "/dashboard/admin/profile",
   }[role]
-  
-  // Generate simple breadcrumbs based on the URL path
-  const pathnames = location.pathname.split('/').filter(x => x)
-  const breadcrumbs = pathnames.map((name, index) => {
-    const href = `/${pathnames.slice(0, index + 1).join('/')}`
-    return { label: name.charAt(0).toUpperCase() + name.slice(1).replace('-', ' '), href }
-  })
+
+  const breadcrumbs = location.pathname.split("/").filter(Boolean).map((segment) =>
+    segment.charAt(0).toUpperCase() + segment.slice(1).replaceAll("-", " ")
+  )
+  const currentPage = breadcrumbs.at(-1)
 
   return (
     <SidebarProvider>
@@ -70,20 +68,19 @@ export function AppLayout({ role }: { role: UserRole }) {
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <div className="flex min-w-0 flex-1 items-center">
-            <nav className="flex items-center text-sm font-medium text-slate-500">
-              {breadcrumbs.map((crumb, index) => (
-                <span key={crumb.href} className="flex items-center">
-                  {index > 0 && <span className="mx-2 text-slate-300">/</span>}
-                  <span className={index === breadcrumbs.length - 1 ? "text-slate-900" : ""}>
-                    {crumb.label}
-                  </span>
+            <nav aria-label="Breadcrumb" className="flex min-w-0 items-center text-sm font-medium text-slate-500">
+              {breadcrumbs.slice(0, -1).map((label, index) => (
+                <span key={index} className="hidden min-w-0 items-center sm:flex">
+                  <span className="truncate">{label}</span>
+                  <span aria-hidden="true" className="mx-2 shrink-0 text-slate-300">/</span>
                 </span>
               ))}
+              <span aria-current="page" className="truncate text-slate-900">{currentPage}</span>
             </nav>
           </div>
           <Link
             to={profilePath}
-            className="flex items-center gap-3 rounded-full p-1.5 pr-3 transition hover:bg-slate-50"
+            className="flex shrink-0 items-center gap-3 rounded-full p-1.5 pr-3 transition hover:bg-slate-50"
           >
             <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-sky-400 to-sky-600 text-sm font-bold text-white">
               {initials || "U"}

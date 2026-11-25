@@ -1,6 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import prisma from "../lib/prisma.js";
 
 interface JwtPayload {
   userId: string;
@@ -13,7 +12,7 @@ export interface AuthenticatedRequest extends Request {
   user?: JwtPayload;
 }
 
-export const authenticate = async (
+export const authenticate = (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction,
@@ -42,22 +41,7 @@ export const authenticate = async (
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET) as JwtPayload;
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, role: true },
-    });
-
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication session is no longer valid",
-      });
-    }
-
-    req.user = {
-      userId: user.id,
-      role: user.role,
-    };
+    req.user = decoded;
 
     next();
   } catch (error) {
