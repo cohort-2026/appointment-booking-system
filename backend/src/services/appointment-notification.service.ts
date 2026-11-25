@@ -14,14 +14,12 @@ type SavedAppointment = {
   staff: { user: { firstName: string; lastName: string | null; email: string } } | null;
 };
 
-export function savedAppointmentUrl(id: string, frontendOrigin: string, justBooked = false): string {
+export function customerAppointmentsUrl(frontendOrigin: string): string {
   const origin = new URL(frontendOrigin);
   if (!["http:", "https:"].includes(origin.protocol) || origin.username || origin.password) {
     throw new Error("Invalid frontend origin configuration");
   }
-  const url = new URL(`/dashboard/customer/appointments/${encodeURIComponent(id)}`, origin);
-  if (justBooked) url.searchParams.set("confirmed", "1");
-  return url.toString();
+  return new URL("/dashboard/customer/appointments", origin).toString();
 }
 
 /** Do not send production customers links pointing at a local development server. */
@@ -51,7 +49,7 @@ async function notifyScheduleRecipients(
     try {
       await send({
         to, audience, change, previousStart, startsAt: appointment.scheduledStart,
-        serviceName: appointment.service.name, appointmentId: appointment.id,
+        serviceName: appointment.service.name,
         providerName: appointment.business?.name ?? appointment.soleProvider?.displayName ?? "Provider",
       });
     } catch {
@@ -91,7 +89,7 @@ async function notifyCustomerConfirmation(
         : null,
       startsAt: appointment.scheduledStart,
       durationMinutes: bookedDurationMinutes(appointment),
-      appointmentUrl: savedAppointmentUrl(appointment.id, frontendOrigin ?? emailFrontendOrigin(), true),
+      appointmentUrl: customerAppointmentsUrl(frontendOrigin ?? emailFrontendOrigin()),
     });
   } catch {
     // Keep configuration, transport errors and recipient information out of logs.
@@ -128,7 +126,7 @@ async function notifyCustomerAppointmentChanged(
       type,
       oldStartsAt: previousStart,
       startsAt: appointment.scheduledStart,
-      appointmentUrl: savedAppointmentUrl(appointment.id, emailFrontendOrigin()),
+      appointmentUrl: customerAppointmentsUrl(emailFrontendOrigin()),
       appointmentId: appointment.id,
       providerName: appointment.soleProvider?.displayName ?? appointment.business?.name ?? "Provider",
       durationMinutes: bookedDurationMinutes(appointment),

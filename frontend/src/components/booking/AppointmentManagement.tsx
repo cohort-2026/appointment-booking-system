@@ -128,8 +128,8 @@ function RescheduleForm({ appointment, onSaved, onPendingChange }: Props & { onP
   </>;
 }
 
-function Reschedule({ appointment, onSaved }: Props) {
-  const [open, setOpen] = useState(false);
+function Reschedule({ appointment, onSaved, initiallyOpen }: Props & { initiallyOpen: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen);
   const [pending, setPending] = useState(false);
   return <Dialog open={open} onOpenChange={next => { if (!pending) setOpen(next); }}>
     <DialogTrigger asChild><Button><CalendarClock aria-hidden="true" />Reschedule</Button></DialogTrigger>
@@ -146,7 +146,9 @@ function Reschedule({ appointment, onSaved }: Props) {
   </Dialog>;
 }
 
-export default function AppointmentManagement({ appointment, onSaved }: Props) {
+export default function AppointmentManagement({
+  appointment, onSaved, openReschedule = false,
+}: Props & { openReschedule?: boolean }) {
   const { canCancel, canReschedule, changeDeadline, changeBlockReason, phone } = appointment;
   const actionsAvailable = canCancel || canReschedule;
   const blockReasonId = useId();
@@ -162,7 +164,7 @@ export default function AppointmentManagement({ appointment, onSaved }: Props) {
       {phone && <p className="text-sm text-muted-foreground">Provider contact <a className="font-medium underline" href={`tel:${phone}`}>{phone}</a></p>}
       <div className="flex flex-wrap gap-3 pt-1">
         {canReschedule
-          ? <Reschedule appointment={appointment} onSaved={onSaved} />
+          ? <Reschedule appointment={appointment} onSaved={onSaved} initiallyOpen={openReschedule} />
           : <Button disabled aria-describedby={canCancel ? rescheduleReasonId : blockReasonId}>
             <CalendarClock aria-hidden="true" />Reschedule
           </Button>}

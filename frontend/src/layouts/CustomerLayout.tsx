@@ -36,11 +36,11 @@ export default function CustomerLayout() {
           </NavLink>)}
         </nav>
         <div className="border-t border-white/10 p-4">
-          <button type="button" onClick={() => void logout()} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-slate-400 hover:bg-red-500/10 hover:text-red-300"><span aria-hidden="true">↪</span>Sign out</button>
+          <button type="button" onClick={() => void logout()} className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium text-slate-400 hover:bg-red-500/10 hover:text-red-300"><span aria-hidden="true">↪</span>Logout</button>
         </div>
       </aside>
 
-      <div className="lg:pl-72">
+      <div className="min-w-0 lg:ml-72">
         <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
             <button type="button" aria-label="Open navigation" onClick={() => setMenuOpen(true)} className="rounded-xl border border-slate-200 p-2 lg:hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button>

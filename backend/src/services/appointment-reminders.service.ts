@@ -1,7 +1,7 @@
 import { ACTIVE_APPOINTMENT_STATUSES } from "../lib/appointment-status.js";
 import prisma from "../lib/prisma.js";
 import { bookingDate, DAY_MS, parseBookingDate } from "../lib/time.js";
-import { emailFrontendOrigin, savedAppointmentUrl } from "./appointment-notification.service.js";
+import { emailFrontendOrigin, customerAppointmentsUrl } from "./appointment-notification.service.js";
 import { sendAppointmentReminderEmail } from "./email.service.js";
 
 /** Return the start/end instants of tomorrow in Johannesburg (not server-local time). */
@@ -67,7 +67,7 @@ export async function sendTomorrowReminders(
         serviceName: appointment.service.name,
         providerName: appointment.business?.name ?? appointment.soleProvider?.displayName ?? "Provider",
         startsAt: appointment.scheduledStart,
-        appointmentUrl: savedAppointmentUrl(appointment.id, emailFrontendOrigin()),
+        appointmentUrl: customerAppointmentsUrl(emailFrontendOrigin()),
       });
       accepted++;
     } catch {

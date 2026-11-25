@@ -1,12 +1,9 @@
 import { Route, Routes, Navigate } from "react-router-dom";
 
-import PublicLayout from "../layouts/PublicLayout";
-import ProviderLayout from "../layouts/ProviderLayout";
-import BusinessLayout from "../layouts/BusinessLayout";
-import StaffLayout from "../layouts/StaffLayout";
-import CustomerLayout from "../layouts/CustomerLayout";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { RoleRoute } from "./RoleRoute";
+import { AppLayout } from "../components/layout/AppLayout";
+import PublicLayout from "../layouts/PublicLayout";
 
 // Public pages
 import Home from "../pages/public/Home";
@@ -19,11 +16,9 @@ import ForgotPassword from "../pages/public/ForgotPassword";
 import ResetPassword from "../pages/public/ResetPassword";
 import AcceptStaffInvitation from "../pages/public/AcceptStaffInvitation";
 
-// Provider discovery
+// Provider discovery & Registration
 import Providers from "../pages/public/providers/Providers";
 import ProviderProfile from "../pages/public/providers/ProviderProfile";
-
-// Registration
 import Register from "../pages/public/register/Register";
 import CustomerRegister from "../pages/public/register/CustomerRegister";
 import ProviderRegister from "../pages/public/register/ProviderRegister";
@@ -35,6 +30,7 @@ import CustomerBook from "../pages/dashboard/customer/Book";
 import CustomerAppointments from "../pages/dashboard/customer/Appointments";
 import CustomerAppointmentDetails from "../pages/dashboard/customer/AppointmentDetails";
 import CustomerProfile from "../pages/dashboard/customer/Profile";
+
 // Sole provider dashboard
 import ProviderDashboard from "../pages/dashboard/provider/Dashboard";
 import Services from "../pages/dashboard/provider/Services";
@@ -62,12 +58,14 @@ import StaffAppointments from "../pages/dashboard/staff/Appointments";
 import StaffAvailability from "../pages/dashboard/staff/Availability";
 import StaffProfile from "../pages/dashboard/staff/Profile";
 import AdminDashboard from "../pages/dashboard/admin/Dashboard";
+import AdminProfile from "../pages/dashboard/admin/Profile";
 
 export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/manage/:token" element={<Navigate to="/dashboard/customer/appointments" replace />} />
-      {/* Public pages */}
+
+      {/* --- PUBLIC PAGES --- */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Home />} />
         <Route path="/pricing" element={<Pricing />} />
@@ -86,43 +84,13 @@ export default function AppRoutes() {
         <Route path="/register/business" element={<BusinessRegister />} />
       </Route>
 
-      {/* Sole provider dashboard */}
-      {/* --- PROTECTED PROVIDER DASHBOARD ROUTES --- */}
-      {/* 
-        We wrap the entire provider section in the ProtectedRoute and RoleRoute.
-        Then we use ProviderLayout to render the sidebar.
-      */}
-      <Route
-        path="/dashboard/provider"
-        element={
-          <ProtectedRoute>
-            <RoleRoute allowedRoles={["SOLE_PROVIDER"]}>
-              <ProviderLayout />
-            </RoleRoute>
-          </ProtectedRoute>
-        }
-      >
-        
-        {/* Index route for /dashboard/provider (the main Dashboard) */}
-        <Route index element={<ProviderDashboard />} />
-        
-        {/* Sub-routes for the provider dashboard */}
-        <Route path="services" element={<Services />} />
-        <Route path="appointments" element={<Appointments />} />
-        <Route path="availability" element={<Availability />} />
-        <Route path="availability/edit" element={<Availability editMode />} />
-        <Route path="profile" element={<ProviderProfilePage />} />
-        <Route path="subscription" element={<ProviderPackage />} />
-      </Route>
-
-      {/* Customer dashboard */}
-      {/* --- PROTECTED CUSTOMER DASHBOARD --- */}
+      {/* --- 1. PROTECTED CUSTOMER DASHBOARD --- */}
       <Route
         path="/dashboard/customer"
         element={
           <ProtectedRoute>
             <RoleRoute allowedRoles={["CUSTOMER"]}>
-              <CustomerLayout />
+              <AppLayout role="customer" />
             </RoleRoute>
           </ProtectedRoute>
         }
@@ -135,14 +103,13 @@ export default function AppRoutes() {
         <Route path="profile" element={<CustomerProfile />} />
       </Route>
 
-      {/* Business owner dashboard */}
-      {/* --- PROTECTED BUSINESS DASHBOARD --- */}
+      {/* --- 2. PROTECTED BUSINESS OWNER DASHBOARD --- */}
       <Route
         path="/dashboard/business"
         element={
           <ProtectedRoute>
             <RoleRoute allowedRoles={["BUSINESS_OWNER"]}>
-              <BusinessLayout />
+              <AppLayout role="owner" />
             </RoleRoute>
           </ProtectedRoute>
         }
@@ -152,21 +119,41 @@ export default function AppRoutes() {
         <Route path="staff" element={<BusinessStaff />} />
         <Route path="staff/:id" element={<StaffDetails />} />
         <Route path="appointments" element={<BusinessAppointments />} />
-        <Route path="package" element={<BusinessPackage />} />
         <Route path="analytics" element={<BusinessAnalytics />} />
+        <Route path="package" element={<BusinessPackage />} />
         <Route path="package/plans" element={<UpgradePlans />} />
         <Route path="package/checkout" element={<PackageCheckout />} />
         <Route path="package/success" element={<PackageSuccess />} />
         <Route path="profile" element={<BusinessProfilePage />} />
       </Route>
 
-      {/* Business staff dashboard */}
+      {/* --- 3. PROTECTED SOLE PROVIDER DASHBOARD --- */}
+      <Route
+        path="/dashboard/provider"
+        element={
+          <ProtectedRoute>
+            <RoleRoute allowedRoles={["SOLE_PROVIDER"]}>
+              <AppLayout role="provider" />
+            </RoleRoute>
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<ProviderDashboard />} />
+        <Route path="services" element={<Services />} />
+        <Route path="appointments" element={<Appointments />} />
+        <Route path="availability" element={<Availability />} />
+        <Route path="availability/edit" element={<Availability editMode />} />
+        <Route path="profile" element={<ProviderProfilePage />} />
+        <Route path="subscription" element={<ProviderPackage />} />
+      </Route>
+
+      {/* --- 4. PROTECTED STAFF DASHBOARD --- */}
       <Route
         path="/dashboard/staff"
         element={
           <ProtectedRoute>
             <RoleRoute allowedRoles={["BUSINESS_STAFF"]}>
-              <StaffLayout />
+              <AppLayout role="staff" />
             </RoleRoute>
           </ProtectedRoute>
         }
@@ -177,17 +164,21 @@ export default function AppRoutes() {
         <Route path="profile" element={<StaffProfile />} />
       </Route>
 
-      {/* Admin dashboard */}
+      {/* --- 5. PROTECTED ADMIN DASHBOARD --- */}
       <Route
         path="/dashboard/admin"
         element={
           <ProtectedRoute>
             <RoleRoute allowedRoles={["ADMIN"]}>
-              <AdminDashboard />
+              <AppLayout role="admin" />
             </RoleRoute>
           </ProtectedRoute>
         }
-      />
+      >
+        <Route index element={<AdminDashboard />} />
+        <Route path="profile" element={<AdminProfile />} />
+        {/* Add more admin routes here as needed */}
+      </Route>
 
       {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { appointmentCalendar } from "./appointment-calendar.js";
+import { appointmentCalendar, appointmentCalendarUid } from "./appointment-calendar.js";
 
 const base = {
   id: "appointment-123",
@@ -12,7 +12,11 @@ const base = {
 
 test("confirmation attachment uses the saved UTC interval and escapes descriptions", () => {
   const file = appointmentCalendar(base);
-  assert.match(file, /UID:appointment-123@itthynkappoint/);
+  const uid = appointmentCalendarUid(base.id);
+  assert.match(uid, /^[A-Za-z0-9_-]{43}@itthynkappoint$/);
+  assert.ok(file.includes(`UID:${uid}\r\n`));
+  assert.ok(!file.includes(base.id));
+  assert.notEqual(appointmentCalendarUid("another-appointment"), uid);
   assert.match(file, /DTSTART:20261123T080000Z/);
   assert.match(file, /DTEND:20261123T090000Z/);
   assert.ok(file.includes("SUMMARY:Cut\\, style\\; wash - Demo Team"));
@@ -23,7 +27,11 @@ test("confirmation attachment uses the saved UTC interval and escapes descriptio
 test("reschedule and cancellation preserve event UID and increase sequence", () => {
   const moved = appointmentCalendar({ ...base, sequence: 1 });
   const cancelled = appointmentCalendar({ ...base, sequence: 2, cancelled: true });
-  for (const event of [moved, cancelled]) assert.match(event, /UID:appointment-123@itthynkappoint/);
+  const uidLine = `UID:${appointmentCalendarUid(base.id)}\r\n`;
+  for (const event of [moved, cancelled]) {
+    assert.ok(event.includes(uidLine));
+    assert.ok(!event.includes(base.id));
+  }
   assert.match(moved, /SEQUENCE:1/);
   assert.match(cancelled, /SEQUENCE:2/);
   assert.match(cancelled, /METHOD:CANCEL/);

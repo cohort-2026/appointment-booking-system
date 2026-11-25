@@ -1,3 +1,5 @@
+import { appointmentCalendarUid } from "../lib/appointment-calendar.js";
+import { customerChangePolicy } from "../services/appointment-lifecycle.service.js";
 import {
   changeCustomerAppointment, customerAppointmentDetails, findCustomerAppointment, getReplacementOptions,
 } from "../services/customer-appointment.service.js";
@@ -42,8 +44,8 @@ export const getCustomerDashboard = async (
         take: 5,
         include: {
           service: { select: { name: true, durationMinutes: true, expectedPrice: true } },
-          soleProvider: { select: { displayName: true } },
-          business: { select: { name: true } },
+          soleProvider: { select: { displayName: true, cancellationCutoffHours: true } },
+          business: { select: { name: true, cancellationCutoffHours: true } },
           staff: {
             select: {
               title: true,
@@ -77,6 +79,9 @@ export const getCustomerDashboard = async (
       upcomingAppointments: upcomingAppointments.map((appointment) => ({
         id: appointment.id,
         time: appointment.scheduledStart,
+        endsAt: appointment.scheduledEnd,
+        calendarUid: appointmentCalendarUid(appointment.id),
+        canReschedule: customerChangePolicy(appointment, now).canReschedule,
         service: appointment.service.name,
         providerName:
           appointment.soleProvider?.displayName ??
