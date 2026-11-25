@@ -23,7 +23,14 @@ export const customerAppointmentInclude = {
 
 export type CustomerAppointment = Prisma.AppointmentGetPayload<{ include: typeof customerAppointmentInclude }>;
 
-export function customerChangePolicy(appointment: CustomerAppointment, now = new Date()) {
+type CustomerChangeAppointment = Pick<
+  CustomerAppointment, "scheduledStart" | "status" | "soleProviderId" | "businessId" | "staffId"
+> & {
+  business: { cancellationCutoffHours: number } | null;
+  soleProvider: { cancellationCutoffHours: number } | null;
+};
+
+export function customerChangePolicy(appointment: CustomerChangeAppointment, now = new Date()) {
   const cutoff = (appointment.business ?? appointment.soleProvider)?.cancellationCutoffHours ?? 24;
   const changeDeadline = new Date(appointment.scheduledStart.getTime() - cutoff * 3_600_000);
   const active = ACTIVE_APPOINTMENT_STATUSES.includes(appointment.status);

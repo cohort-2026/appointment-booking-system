@@ -131,6 +131,24 @@ try {
     assert.equal(buckets[0].count, 1);
   });
   const token=id=>jwt.sign({userId:id,role:'CUSTOMER'},process.env.JWT_SECRET);
+  await check('signed-in customer can save their profile while email remains read-only', async () => {
+    const headers = { authorization: `Bearer ${token('c1')}`, 'Content-Type': 'application/json' };
+    const profile = origin + '/api/auth/me';
+    const update = body => fetch(profile, { method: 'PATCH', headers, body: JSON.stringify(body) });
+    assert.equal((await fetch(profile, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
+    assert.equal((await update({ email: 'different@test.invalid' })).status, 400);
+    const response = await update({ firstName: 'Updated', lastName: 'Customer', phone: '0821234567' });
+    assert.equal(response.status, 200);
+    const { user } = await response.json();
+    assert.equal(user.firstName, 'Updated');
+    assert.equal(user.lastName, 'Customer');
+    assert.equal(user.email, 'c1@test.invalid');
+    const { user: saved } = await (await fetch(profile, { headers })).json();
+    assert.equal(saved.firstName, 'Updated');
+    assert.equal(saved.lastName, 'Customer');
+    assert.ok(saved.phone);
+    assert.equal(saved.email, 'c1@test.invalid');
+  });
   await check('saved detail is direct, ownership-checked and excludes internal tokens',async()=>{
     const r=await fetch(`${origin}/api/customer/appointments/${booked.id}`,{headers:{authorization:`Bearer ${token('c1')}`}});assert.equal(r.status,200);
     const {appointment}=await r.json();assert.equal(appointment.price,'300');assert.equal(appointment.durationMinutes,120);assert.match(appointment.calendarUid,/^[A-Za-z0-9_-]{43}@itthynkappoint$/);assert.ok(!appointment.calendarUid.includes(booked.id));assert.equal(appointment.customerNotes,'Please call on arrival');assert.equal('manageTokenHash' in appointment,false);
@@ -161,6 +179,15 @@ try {
     savedId=saved.appointment.id;
     const detail=await request('c1',`/${savedId}`);
     assert.equal(detail.appointment.canCancel,true);assert.equal(detail.appointment.canReschedule,true);
+    const dashboard = await fetch(origin + '/api/customer/dashboard', {
+      headers: { authorization: `Bearer ${token('c1')}` },
+    });
+    assert.equal(dashboard.status, 200);
+    const { upcomingAppointments } = await dashboard.json();
+    assert.equal(upcomingAppointments[0].id, savedId);
+    assert.equal(upcomingAppointments[0].canReschedule, detail.appointment.canReschedule);
+    assert.equal(upcomingAppointments[0].calendarUid, detail.appointment.calendarUid);
+    assert.equal(upcomingAppointments[0].endsAt, detail.appointment.endsAt);
     assert.deepEqual(detail.appointment.events.map(event=>event.type),['CREATED']);
     assert.equal((await request('c2',`/${savedId}/reschedule-options?date=${manageDay}`)).status,404);
     assert.equal((await request('c2',`/${savedId}/reschedule`,'PATCH',{startsAt:time(10)})).status,404);

@@ -72,7 +72,7 @@ export function AppSidebar({ role, ...props }: React.ComponentProps<typeof Sideb
 
   return (
     <Sidebar collapsible="icon" className="border-r border-slate-800 bg-[#0B1220] text-slate-300" {...props}>
-      <SidebarHeader className="border-b border-slate-800/50"><TeamSwitcher teams={teams} /></SidebarHeader>
+      <SidebarHeader className="border-b border-slate-800/50 px-3 py-4"><TeamSwitcher teams={teams} /></SidebarHeader>
       <SidebarContent>
         <nav aria-label={navigationLabels[role]}>
           <NavMain items={getNavItems(role)} />

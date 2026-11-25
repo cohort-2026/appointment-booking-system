@@ -7,7 +7,10 @@ import { safeCustomerReturnPath, finishVerifiedBooking } from '../src/lib/bookin
 import { parseBookingDraft, saveBookingDraft } from '../src/lib/bookingDraft';
 const date=new Date(Date.now()+3*86_400_000+7_200_000).toISOString().slice(0,10);
 const start=(time:string)=>new Date(`${date}T${time}:00+02:00`).toISOString();
-const customer={id:'customer',email:'c@test.invalid',firstName:'Test',role:'CUSTOMER'};
+const customer={id:'customer',email:'c@test.invalid',firstName:'Test',lastName:'',phone:'',role:'CUSTOMER'};
+let profile = customer;
+let profileUpdates: Record<string, unknown>[] = [];
+let dashboardShowsAppointment = false;
 let loggedIn=false,kind='business',posts:Record<string,unknown>[]=[],conflict=false,details=0,availabilityFails=false;
 let movedTo: string | null = null;
 let cancelled = false;
@@ -24,17 +27,31 @@ beforeEach(()=>{
     media, matches: false, addEventListener() {}, removeEventListener() {},
   }));
   dashboardForbidden = false;
+  dashboardShowsAppointment = false;
+  profile = customer;
+  profileUpdates = [];
   localStorage.clear();loggedIn=false;kind='business';posts=[];conflict=false;details=0;availabilityFails=false;
   movedTo=null;cancelled=false;moveConflict=false;insideCutoff=false;
   cancellationReasons.length=0;moveAttempts.length=0;
   vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
     const url=new URL(String(input),'http://localhost'),path=decodeURIComponent(url.pathname);
     const json=(body:unknown,status=200)=>Promise.resolve(new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}}));
-    if(path==='/api/auth/me')return json(loggedIn?{user:customer}:{message:'Signed out'},loggedIn?200:401);
+    if(path==='/api/auth/me' && init?.method==='PATCH'){
+      const body=JSON.parse(String(init.body));
+      profileUpdates.push(body);
+      profile={...profile,...body};
+      return json({user:profile});
+    }
+    if(path==='/api/auth/me')return json(loggedIn?{user:profile}:{message:'Signed out'},loggedIn?200:401);
     if(path==='/api/auth/login'){loggedIn=true;return json({user:customer});}
     if(path==='/api/customer/dashboard') {
       if (dashboardForbidden) return json({message:'You do not have permission to access this resource'},403);
-      return json({stats:{todayAppointments:0,upcomingAppointments:0,completedAppointments:0,cancelledAppointments:0},upcomingAppointments:[]});
+      const upcomingAppointments = dashboardShowsAppointment ? [{
+        id: 'saved', time: start('09:00'), endsAt: start('11:00'), service:'Consultation', providerName:'Test Studio',
+        staffName:null, durationMinutes:120, price:'300', status:'CONFIRMED', canReschedule:true,
+        calendarUid:'fixture-calendar-uid@itthynkappoint',
+      }] : [];
+      return json({stats:{todayAppointments:0,upcomingAppointments:upcomingAppointments.length,completedAppointments:0,cancelledAppointments:0},upcomingAppointments});
     }
     if(path==='/api/providers')return json({providers:[provider()]});
     if(path.endsWith('/availability')){
@@ -243,4 +260,38 @@ it('shows a dashboard permission error and retries without manufacturing empty d
   await user.click(screen.getByRole('button', {name:'Try again'}));
   await screen.findByText('No upcoming appointments');
   expect(screen.queryByRole('alert')).toBeNull();
+});
+
+it('opens the existing reschedule dialog from the next-appointment banner', async () => {
+  loggedIn = true;
+  dashboardShowsAppointment = true;
+  const user = userEvent.setup();
+  mount('/dashboard/customer');
+  const banner = within(await screen.findByRole('region', {name:/09:00/}));
+  await user.click(banner.getByRole('link', {name:'Reschedule'}));
+  const dialog = within(await screen.findByRole('dialog'));
+  expect(dialog.getByRole('heading', {name:'Reschedule appointment'})).toBeTruthy();
+});
+
+it('saves customer profile edits while keeping email read-only', async () => {
+  loggedIn = true;
+  const user = userEvent.setup();
+  mount('/dashboard/customer/profile');
+  await user.click(await screen.findByRole('button', {name:'Edit profile'}));
+  const email = screen.getByLabelText(/Email address/) as HTMLInputElement;
+  expect(email.readOnly).toBe(true);
+  expect(email.value).toBe(customer.email);
+
+  const firstName = screen.getByLabelText('First name');
+  await user.clear(firstName);
+  await user.type(firstName, 'Updated');
+  await user.type(screen.getByLabelText('Last name'), 'Customer');
+  await user.type(screen.getByLabelText('Phone number'), '0821234567');
+  await user.click(screen.getByRole('button', {name:'Save changes'}));
+  await screen.findByText('Your profile has been updated.');
+  expect(profileUpdates).toEqual([{firstName:'Updated', lastName:'Customer', phone:'0821234567'}]);
+
+  await user.click(screen.getByRole('button', {name:'Edit profile'}));
+  expect((screen.getByLabelText('First name') as HTMLInputElement).value).toBe('Updated');
+  expect((screen.getByLabelText(/Email address/) as HTMLInputElement).value).toBe(customer.email);
 });

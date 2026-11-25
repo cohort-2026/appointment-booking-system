@@ -514,16 +514,18 @@ export const updateMe = async (req: AuthenticatedRequest, res: Response) => {
   }
 
   try {
-    await prisma.user.update({ where: { id: req.user!.userId }, data });
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.update({
       where: { id: req.user!.userId },
+      data,
       include: USER_ROLE_INCLUDE,
     });
-    if (!user) return res.status(404).json({ success: false, message: "User not found" });
     return res.status(200).json({ success: true, user: serializeUser(user) });
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
       return res.status(409).json({ success: false, message: "That phone number is already in use" });
+    }
+    if (error && typeof error === "object" && "code" in error && error.code === "P2025") {
+      return res.status(404).json({ success: false, message: "User not found" });
     }
     console.error("Update current user error:", error);
     return res.status(500).json({ success: false, message: "Unable to update your profile" });

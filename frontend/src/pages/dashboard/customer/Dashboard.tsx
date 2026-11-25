@@ -4,6 +4,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import { apiFetch } from "../../../services/api";
 import { Calendar } from "lucide-react";
 
+import { NextAppointmentBanner, type UpcomingAppointment } from "@/components/booking/NextAppointmentBanner";
 import { StatCard } from "@/components/dashboard/StatCard"
 import { AppointmentCard } from "@/components/appointment/AppointmentCard"
 import type { Appointment } from "@/components/appointment/AppointmentCard"
@@ -21,7 +22,7 @@ type DashboardResponse = {
     completedAppointments: number;
     cancelledAppointments: number;
   };
-  upcomingAppointments: Appointment[];
+  upcomingAppointments: UpcomingAppointment[];
 };
 
 const dashboardLinks = [
@@ -134,21 +135,15 @@ export default function CustomerDashboard() {
 
   return (
       <div className="w-full space-y-7">
-        {/* Hero Section */}
-        <section className="flex flex-col justify-between gap-5 rounded-3xl bg-gradient-to-br from-[#0B1220] via-[#12253A] to-[#164E63] px-6 py-8 text-white sm:px-9 sm:py-10 md:flex-row md:items-center">
-          <div>
-            <p className="text-sm font-semibold text-sky-300">CUSTOMER DASHBOARD</p>
-            <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">
-              Welcome back{user?.firstName ? `, ${user.firstName}` : ""}
-            </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 sm:text-base">
-              Manage your appointments and discover services.
-            </p>
-          </div>
-          <Button asChild variant="secondary" className="w-fit rounded-xl bg-sky-400 font-bold text-slate-950 hover:bg-sky-300">
-            <Link to="/dashboard/customer/book">＋ Find a service</Link>
-          </Button>
-        </section>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-sky-700">Your account</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+            Welcome back{user?.firstName ? `, ${user.firstName}` : ""}
+          </h1>
+        </div>
+        {dashboard?.upcomingAppointments[0] && (
+          <NextAppointmentBanner appointment={dashboard.upcomingAppointments[0]} />
+        )}
 
         {/* Global Error State */}
         {error && (
