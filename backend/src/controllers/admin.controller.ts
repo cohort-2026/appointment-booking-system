@@ -1,6 +1,7 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
+import { bookingMonthBounds } from "../lib/time.js";
 import { sendTomorrowReminders } from "../services/appointment-reminders.service.js";
 
 const OUTBOX_STATUSES = ["PENDING", "PROCESSING", "SENT", "FAILED", "SKIPPED"] as const;
@@ -19,17 +20,18 @@ export function maskEmail(email: string) {
   return `${visible}${"*".repeat(Math.max(1, local.length - 1))}@${domain}`;
 }
 
-export const getAdminDashboard = async (_req: AuthenticatedRequest, res: Response) => {
+export function createAdminControllers(db: typeof prisma = prisma, runReminders = sendTomorrowReminders) {
+const getAdminDashboard = async (_req: AuthenticatedRequest, res: Response) => {
   try {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const { start } = bookingMonthBounds(now);
 
     const [totalUsers, totalBusinesses, totalProviders, totalBookingsThisMonth] = await Promise.all([
-      prisma.user.count(),
-      prisma.business.count(),
-      prisma.soleProvider.count(),
-      prisma.appointment.count({
-        where: { createdAt: { gte: startOfMonth, lte: now } },
+      db.user.count(),
+      db.business.count(),
+      db.soleProvider.count(),
+      db.appointment.count({
+        where: { createdAt: { gte: start, lte: now } },
       }),
     ]);
 
@@ -51,7 +53,7 @@ export const getAdminDashboard = async (_req: AuthenticatedRequest, res: Respons
   }
 };
 
-export const getAdminOutbox = async (req: AuthenticatedRequest, res: Response) => {
+const getAdminOutbox = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const page = positivePage(typeof req.query.page === "string" ? req.query.page : undefined, 1);
     const pageSize = positivePage(typeof req.query.pageSize === "string" ? req.query.pageSize : undefined, 20, 100);
@@ -65,9 +67,9 @@ export const getAdminOutbox = async (req: AuthenticatedRequest, res: Response) =
     const where = status ? { status } : {};
 
     const [items, total] = await Promise.all([
-      prisma.outboxMessage.findMany({
+      db.outboxMessage.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
@@ -80,10 +82,9 @@ export const getAdminOutbox = async (req: AuthenticatedRequest, res: Response) =
           sentAt: true,
           createdAt: true,
           updatedAt: true,
-          lastError: true,
         },
       }),
-      prisma.outboxMessage.count({ where }),
+      db.outboxMessage.count({ where }),
     ]);
 
     return res.status(200).json({
@@ -105,9 +106,9 @@ export const getAdminOutbox = async (req: AuthenticatedRequest, res: Response) =
   }
 };
 
-export const runAdminJobs = async (_req: AuthenticatedRequest, res: Response) => {
+const runAdminJobs = async (_req: AuthenticatedRequest, res: Response) => {
   try {
-    const result = await sendTomorrowReminders();
+    const result = await runReminders();
     return res.status(200).json({ success: true, ...result });
   } catch (error) {
     console.error("Admin manual job error:", error);
@@ -117,3 +118,6 @@ export const runAdminJobs = async (_req: AuthenticatedRequest, res: Response) =>
     });
   }
 };
+
+return { getAdminDashboard, getAdminOutbox, runAdminJobs };
+}

@@ -22,7 +22,6 @@ export type OutboxRecord = {
   sentAt: string | null;
   createdAt: string;
   updatedAt: string;
-  lastError: string | null;
 };
 
 export type AdminOutboxResponse = {

@@ -45,11 +45,14 @@ export default function AdminDashboard() {
   const [outbox, setOutbox] = useState<OutboxRecord[]>([]);
   const [outboxPage, setOutboxPage] = useState(1);
   const [outboxTotalPages, setOutboxTotalPages] = useState(0);
-  const [loadingDashboard, setLoadingDashboard] = useState(true);
-  const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
   const [dashboardRetry, setDashboardRetry] = useState(0);
   const [jobRunning, setJobRunning] = useState(false);
   const [jobResult, setJobResult] = useState<string | null>(null);
+  const [jobFailed, setJobFailed] = useState(false);
   const [jobError, setJobError] = useState<string | null>(null);
 
   const handleLogout = async () => {
@@ -60,37 +63,53 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     let active = true;
-    void Promise.all([fetchAdminDashboard(), fetchAdminOutbox(outboxPage, 10)])
-      .then(([dashboard, messages]) => {
+    void fetchAdminDashboard()
+      .then((dashboard) => {
         if (!active) return;
         setStats(dashboard.stats);
-        setOutbox(messages.items);
-        setOutboxTotalPages(messages.pagination.totalPages);
-        setDashboardError(null);
+        setStatsError(null);
       })
       .catch((reason: unknown) => {
         if (active) {
-          setDashboardError(
+          setStatsError(
             reason instanceof Error
               ? reason.message
-              : "Admin data could not be loaded."
+              : "Overview could not be loaded."
           );
         }
       })
       .finally(() => {
-        if (active) setLoadingDashboard(false);
+        if (active) setLoadingStats(false);
       });
     return () => {
       active = false;
     };
+  }, [dashboardRetry]);
+
+  useEffect(() => {
+    let active = true;
+    void fetchAdminOutbox(outboxPage, 10)
+      .then((messages) => {
+        if (!active) return;
+        setOutbox(messages.items);
+        setOutboxTotalPages(messages.pagination.totalPages);
+        setMessagesError(null);
+      })
+      .catch((reason: unknown) => {
+        if (active) setMessagesError(reason instanceof Error ? reason.message : "Notification records could not be loaded.");
+      })
+      .finally(() => { if (active) setLoadingMessages(false); });
+    return () => { active = false; };
   }, [outboxPage, dashboardRetry]);
 
   const handleRunJobs = async () => {
     setJobRunning(true);
     setJobResult(null);
+    setJobFailed(false);
     setJobError(null);
     try {
       const result = await runAdminJobs();
+      setJobFailed(result.failed > 0);
       setJobResult(
         `Attempted ${result.attempted}; accepted ${result.accepted}; failed ${result.failed}.`
       );
@@ -314,7 +333,7 @@ export default function AdminDashboard() {
           </section>
 
           {/* Stats */}
-          <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {stats && !statsError && !loadingStats && <section className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               title="Total users"
               value={stats?.totalUsers ?? 0}
@@ -342,20 +361,26 @@ export default function AdminDashboard() {
               subtitle="Across all accounts"
               icon="▣"
             />
-          </section>
+          </section>}
 
-          {loadingDashboard && (
+          {loadingStats && (
             <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-500">
               Loading admin data...
             </div>
           )}
 
-          {dashboardError && (
+          {(statsError || messagesError) && (
             <div className="mb-6 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-              <span>{dashboardError}</span>
+              <span role="alert">{[statsError, messagesError].filter(Boolean).join(" ")}</span>
               <button
                 type="button"
-                onClick={() => setDashboardRetry((prev) => prev + 1)}
+                onClick={() => {
+                  setLoadingStats(true);
+                  setLoadingMessages(true);
+                  setStatsError(null);
+                  setMessagesError(null);
+                  setDashboardRetry((prev) => prev + 1);
+                }}
                 className="rounded-lg border border-red-300 px-3 py-2 font-semibold"
               >
                 Retry
@@ -383,7 +408,7 @@ export default function AdminDashboard() {
             </div>
 
             {jobResult && (
-              <div className="mx-5 mt-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              <div role="status" className={`mx-5 mt-5 rounded-lg border p-3 text-sm ${jobFailed ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
                 {jobResult}
               </div>
             )}
@@ -393,11 +418,13 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {outbox.length === 0 ? (
+            {messagesError ? null : loadingMessages ? (
+              <div role="status" className="p-8 text-center text-sm text-slate-500">
+                Loading notification records...
+              </div>
+            ) : outbox.length === 0 ? (
               <div className="p-8 text-center text-sm text-slate-500">
-                {loadingDashboard
-                  ? "Loading notification records..."
-                  : "No notification records found."}
+                No notification records found.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -449,14 +476,15 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {outboxTotalPages > 1 && (
+            {!messagesError && !loadingMessages && outboxTotalPages > 1 && (
               <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 text-sm">
                 <button
                   type="button"
                   disabled={outboxPage <= 1}
-                  onClick={() =>
+                  onClick={() => {
+                    setLoadingMessages(true);
                     setOutboxPage((page) => Math.max(1, page - 1))
-                  }
+                  }}
                   className="rounded-lg border px-3 py-2 disabled:opacity-40"
                 >
                   Previous
@@ -467,9 +495,10 @@ export default function AdminDashboard() {
                 <button
                   type="button"
                   disabled={outboxPage >= outboxTotalPages}
-                  onClick={() =>
+                  onClick={() => {
+                    setLoadingMessages(true);
                     setOutboxPage((page) => Math.min(outboxTotalPages, page + 1))
-                  }
+                  }}
                   className="rounded-lg border px-3 py-2 disabled:opacity-40"
                 >
                   Next

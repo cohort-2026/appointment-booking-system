@@ -1,16 +1,17 @@
 import { Router } from "express";
-import {
-  getAdminDashboard,
-  getAdminOutbox,
-  runAdminJobs,
-} from "../controllers/admin.controller.js";
+import { createAdminControllers } from "../controllers/admin.controller.js";
 import { authenticate, requireRole } from "../middleware/auth.middleware.js";
 
+export function createAdminRoutes(controllers = createAdminControllers()): ReturnType<typeof Router> {
 const router: ReturnType<typeof Router> = Router();
 
 router.use(authenticate, requireRole("ADMIN"));
-router.get("/dashboard", getAdminDashboard);
-router.get("/outbox", getAdminOutbox);
-router.post("/jobs/run", runAdminJobs);
+router.get("/dashboard", controllers.getAdminDashboard);
+router.get("/outbox", controllers.getAdminOutbox);
+router.post("/jobs/run", controllers.runAdminJobs);
 
-export default router;
+return router;
+}
+
+const adminRoutes: ReturnType<typeof Router> = createAdminRoutes();
+export default adminRoutes;
