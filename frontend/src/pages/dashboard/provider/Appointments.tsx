@@ -1,3 +1,4 @@
+import AppointmentHistoryDrawer from "../../../components/booking/AppointmentHistoryDrawer";
 // src/pages/dashboard/provider/Appointments.tsx
 import { useState, useEffect } from "react";
 import toast from "react-hot-toast";
@@ -10,15 +11,15 @@ type Appointment = {
   customerEmail: string;
   serviceName: string;
   date: string; // ISO string
-  status: "UPCOMING" | "COMPLETED" | "CANCELLED";
+  status: "UPCOMING" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
   notes?: string;
 };
 
-const appointmentTabs = ["UPCOMING", "COMPLETED", "CANCELLED"] as const;
+const appointmentTabs = ["UPCOMING", "COMPLETED", "CANCELLED", "NO_SHOW"] as const;
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [activeTab, setActiveTab] = useState<"UPCOMING" | "COMPLETED" | "CANCELLED">("UPCOMING");
+  const [activeTab, setActiveTab] = useState<"UPCOMING" | "COMPLETED" | "CANCELLED" | "NO_SHOW">("UPCOMING");
   const [viewMode, setViewMode] = useState<"LIST" | "CALENDAR">("CALENDAR");
   const [isLoading, setIsLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -44,22 +45,6 @@ export default function Appointments() {
       isMounted = false;
     };
   }, [activeTab, refreshKey]);
-
-  // Update Status
-  const handleStatusUpdate = async (id: string, newStatus: string) => {
-    setIsLoading(true);
-    try {
-      await apiFetch(`/provider/appointments/${id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: newStatus }),
-      });
-      toast.success(`Appointment marked as ${newStatus.toLowerCase()}`);
-      setRefreshKey((current) => current + 1);
-    } catch (error) {
-      console.error("Provider appointment status update failed:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to update appointment");
-    }
-  };
 
   return (
     // Changed max-w-5xl to max-w-7xl to give the calendar more room
@@ -87,7 +72,7 @@ export default function Appointments() {
           >
             {appointmentTabs.map((tab) => (
               <option key={tab} value={tab}>
-                {tab.charAt(0) + tab.slice(1).toLowerCase()}
+                {tab === "NO_SHOW" ? "No-show" : tab.charAt(0) + tab.slice(1).toLowerCase()}
               </option>
             ))}
           </select>
@@ -159,30 +144,12 @@ export default function Appointments() {
                         </div>
                       </div>
 
-                      {/* Actions based on status */}
-                      <div className="flex items-center gap-2 sm:justify-end">
-                        {apt.status === "UPCOMING" && (
-                          <>
-                            <button onClick={() => handleStatusUpdate(apt.id, "COMPLETED")} className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition">
-                              Mark Completed
-                            </button>
-                            <button onClick={() => handleStatusUpdate(apt.id, "CANCELLED")} className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 transition">
-                              Cancel
-                            </button>
-                          </>
-                        )}
-                        
-                        {apt.status === "COMPLETED" && (
-                          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                            Completed
-                          </span>
-                        )}
-
-                        {apt.status === "CANCELLED" && (
-                          <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-                            Cancelled
-                          </span>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <span className="capitalize">{apt.status.toLowerCase().replaceAll("_", " ")}</span>
+                        <AppointmentHistoryDrawer role="provider" id={apt.id} startsAt={apt.date}
+                          title={`${apt.serviceName} · ${apt.customerName}`}
+                          onSaved={() => { setIsLoading(true); setRefreshKey(current => current + 1); }}
+                        />
                       </div>
                     </div>
                   );

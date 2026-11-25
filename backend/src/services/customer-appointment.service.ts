@@ -4,7 +4,7 @@ import prisma from "../lib/prisma.js";
 import { BOOKING_TIME_ZONE, bookingDate } from "../lib/time.js";
 import {
   appointmentAvailabilitySnapshot, customerAppointmentInclude, customerChangePolicy,
-  requireCustomerChange, saveCustomerTransition, type CustomerAppointment,
+  requireCustomerChange, saveAppointmentTransition, type CustomerAppointment,
 } from "./appointment-lifecycle.service.js";
 import {
   BookingError, isBookingWriteConflict, requireCustomerTimeAvailable, resolveBookingAvailability,
@@ -70,10 +70,11 @@ export async function changeCustomerAppointment(owner: Owner, change: Change) {
     return await prisma.$transaction(async tx => {
       const appointment = await findCustomerAppointment(owner, tx);
       const now = new Date();
+      const actor = { role: "CUSTOMER" as const, userId: owner.customerId };
       requireCustomerChange(appointment, change.action, now);
       if (change.action === "cancel") {
-        const saved = await saveCustomerTransition(tx, appointment, { type: "CANCELLED", reason: change.reason }, now);
-        return { appointment: saved, previousStart: appointment.scheduledStart };
+        const saved = await saveAppointmentTransition(tx, appointment, { type: "CANCELLED", reason: change.reason }, now, actor);
+        return { ...saved, previousStart: appointment.scheduledStart };
       }
       if (+change.startsAt === +appointment.scheduledStart) {
         throw new BookingError("Choose a different time to reschedule.", 422);
@@ -83,11 +84,11 @@ export async function changeCustomerAppointment(owner: Owner, change: Change) {
       if (slot?.status !== "AVAILABLE") {
         throw new BookingError("That time is no longer available. Choose another slot.", 409);
       }
-      await requireCustomerTimeAvailable(tx, owner.customerId, change.startsAt, service.durationMinutes, owner.id);
-      const saved = await saveCustomerTransition(tx, appointment, {
+      await requireCustomerTimeAvailable(tx, appointment.customerId, change.startsAt, service.durationMinutes, appointment.id);
+      const saved = await saveAppointmentTransition(tx, appointment, {
         type: "RESCHEDULED", startsAt: change.startsAt, endsAt: new Date(slot.endsAt),
-      }, now);
-      return { appointment: saved, previousStart: appointment.scheduledStart };
+      }, now, actor);
+      return { ...saved, previousStart: appointment.scheduledStart };
     }, { isolationLevel: "Serializable", maxWait: 15_000, timeout: 20_000 });
   } catch (error) {
     if (isBookingWriteConflict(error)) {

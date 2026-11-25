@@ -66,6 +66,7 @@ import AdminDashboard from "../pages/dashboard/admin/Dashboard";
 export default function AppRoutes() {
   return (
     <Routes>
+      <Route path="/manage/:token" element={<Navigate to="/dashboard/customer/appointments" replace />} />
       {/* Public pages */}
       <Route element={<PublicLayout />}>
         <Route path="/" element={<Home />} />

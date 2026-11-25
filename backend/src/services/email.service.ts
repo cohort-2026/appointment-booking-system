@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { appointmentCalendar } from "../lib/appointment-calendar.js";
 
 function escapeHtml(value: string): string {
   return value
@@ -13,6 +14,7 @@ async function sendEmail(
   subject: string,
   text: string,
   html: string,
+  calendar?: string,
 ): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM;
@@ -35,6 +37,11 @@ async function sendEmail(
     subject,
     text,
     html,
+    ...(calendar ? { attachments: [{
+      filename: "appointment.ics",
+      content: Buffer.from(calendar, "utf8").toString("base64"),
+      contentType: "text/calendar",
+    }] } : {}),
   });
 
   if (error) {
@@ -115,7 +122,15 @@ export function buildAppointmentConfirmationEmail(input: AppointmentConfirmation
 
 export async function sendAppointmentConfirmationEmail(input: AppointmentConfirmationInput): Promise<void> {
   const content = buildAppointmentConfirmationEmail(input);
-  await sendEmail(input.to, content.subject, content.text, content.html);
+  await sendEmail(input.to, content.subject, content.text, content.html,
+    appointmentCalendar({
+      id: input.appointmentId,
+      startsAt: input.startsAt,
+      endsAt: new Date(input.startsAt.getTime() + input.durationMinutes * 60_000),
+      service: input.serviceName,
+      provider: input.providerName,
+    }),
+  );
 }
 
 export async function sendStaffInvitationEmail(
@@ -147,6 +162,10 @@ export async function sendAppointmentChangeEmail(input: {
   oldStartsAt: Date;
   startsAt: Date;
   appointmentUrl: string;
+  appointmentId: string;
+  providerName: string;
+  durationMinutes: number;
+  rescheduleCount: number;
 }): Promise<void> {
   const format = new Intl.DateTimeFormat("en-ZA", {
     dateStyle: "long", timeStyle: "short", timeZone: "Africa/Johannesburg",
@@ -160,5 +179,63 @@ export async function sendAppointmentChangeEmail(input: {
     input.to, subject,
     `Hi ${input.firstName}, ${summary}\nView your saved appointment: ${input.appointmentUrl}`,
     `<p>Hi ${escapeHtml(input.firstName)},</p><p>${escapeHtml(summary)}</p><p><a href="${escapeHtml(input.appointmentUrl)}">View your saved appointment</a></p>`,
+    appointmentCalendar({
+      id: input.appointmentId,
+      startsAt: input.startsAt,
+      endsAt: new Date(input.startsAt.getTime() + input.durationMinutes * 60_000),
+      service: input.serviceName,
+      provider: input.providerName,
+      sequence: input.rescheduleCount + (input.type === "CANCELLED" ? 1 : 0),
+      cancelled: input.type === "CANCELLED",
+    }),
+  );
+}
+
+/** Best-effort reminder for tomorrow's appointment (SAST). */
+export async function sendAppointmentReminderEmail(input: {
+  to: string;
+  firstName: string;
+  serviceName: string;
+  providerName: string;
+  startsAt: Date;
+  appointmentUrl: string;
+}): Promise<void> {
+  const time = new Intl.DateTimeFormat("en-ZA", {
+    dateStyle: "long", timeStyle: "short", timeZone: "Africa/Johannesburg",
+  }).format(input.startsAt);
+  const sentence = `Reminder: ${input.serviceName} with ${input.providerName} is scheduled for ${time} (SAST).`;
+  await sendEmail(
+    input.to,
+    `Appointment reminder: ${input.serviceName}`,
+    `Hi ${input.firstName}, ${sentence}\nView your booking: ${input.appointmentUrl}`,
+    `<p>Hi ${escapeHtml(input.firstName)},</p><p>${escapeHtml(sentence)}</p><p><a href="${escapeHtml(input.appointmentUrl)}">View your booking</a></p>`,
+  );
+}
+
+export async function sendAppointmentScheduleAlert(input: {
+  to: string;
+  audience: "owner" | "staff";
+  change: "CREATED" | "CANCELLED" | "RESCHEDULED";
+  previousStart: Date | undefined;
+  startsAt: Date;
+  serviceName: string;
+  providerName: string;
+  appointmentId: string;
+}): Promise<void> {
+  const time = new Intl.DateTimeFormat("en-ZA", {
+    dateStyle: "long", timeStyle: "short", timeZone: "Africa/Johannesburg",
+  });
+  const subject = {
+    CREATED: input.audience === "staff" ? "New booking assigned to you" : "New booking for your schedule",
+    CANCELLED: "Booking cancelled on your schedule",
+    RESCHEDULED: "Booking moved on your schedule",
+  }[input.change];
+  const schedule = input.change === "RESCHEDULED" && input.previousStart
+    ? `Moved from ${time.format(input.previousStart)} (SAST) to ${time.format(input.startsAt)} (SAST).`
+    : `${time.format(input.startsAt)} (SAST).`;
+  const lines = [`${input.serviceName} with ${input.providerName}`, schedule, `Reference: ${input.appointmentId}`];
+  await sendEmail(
+    input.to, subject, lines.join("\n"),
+    lines.map(line => `<p>${escapeHtml(line)}</p>`).join(""),
   );
 }

@@ -6,42 +6,9 @@ import { bookedDurationMinutes, bookedPrice } from "../lib/booking-snapshot.js";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
-import { normalizePhone } from "../lib/phone.js";
 import { BookingError, createBooking } from "../services/booking.service.js";
 
-import { notifyAppointmentCreated, notifyCustomerAppointmentChanged } from "../services/appointment-notification.service.js";
-
-
-/** Customer account editing; booking management remains in the shared S2 service. */
-export const updateCustomerProfile = async (req: AuthenticatedRequest, res: Response) => {
-  const body = req.body;
-  if (!body || typeof body !== "object" || Array.isArray(body)) {
-    return res.status(400).json({ success: false, message: "A profile object is required" });
-  }
-  const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
-  const lastName = body.lastName === null ? null : typeof body.lastName === "string" ? body.lastName.trim() || null : undefined;
-  const phone = body.phone === null || body.phone === "" ? null : typeof body.phone === "string" ? normalizePhone(body.phone) : undefined;
-  if (!firstName || firstName.length > 100 || (lastName !== undefined && lastName !== null && lastName.length > 100)) {
-    return res.status(400).json({ success: false, message: "Enter a valid first and last name" });
-  }
-  if (body.phone !== undefined && body.phone !== null && body.phone !== "" && !phone) {
-    return res.status(400).json({ success: false, message: "Enter a valid South African phone number" });
-  }
-  try {
-    const user = await prisma.user.update({
-      where: { id: req.user!.userId },
-      data: { firstName, ...(lastName !== undefined ? { lastName } : {}), ...(body.phone !== undefined ? { phone } : {}) },
-      select: { id: true, email: true, firstName: true, lastName: true, phone: true, role: true },
-    });
-    return res.json({ success: true, user });
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "P2002") {
-      return res.status(409).json({ success: false, message: "That phone number is already in use" });
-    }
-    console.error("Customer profile update error:", error);
-    return res.status(500).json({ success: false, message: "Unable to update your profile" });
-  }
-};
+import { notifyAppointmentCreated, notifyAppointmentChanged } from "../services/appointment-notification.service.js";
 
 export const getCustomerDashboard = async (
   req: AuthenticatedRequest,
@@ -59,7 +26,7 @@ export const getCustomerDashboard = async (
     const startOfToday = parseBookingDate(bookingDate(now))!;
     const startOfTomorrow = new Date(startOfToday.getTime() + DAY_MS);
 
-    const [stats, upcomingAppointments] = await Promise.all([
+    const [stats, upcomingAppointments, upcomingCount] = await Promise.all([
       prisma.appointment.groupBy({
         by: ["status"],
         where: { customerId: req.user.userId },
@@ -85,6 +52,9 @@ export const getCustomerDashboard = async (
           },
         },
       }),
+      prisma.appointment.count({
+        where: { customerId: req.user.userId, scheduledStart: { gte: now }, status: { in: ["CONFIRMED", "RESCHEDULED"] } },
+      }),
     ]);
 
     const countByStatus = Object.fromEntries(
@@ -94,12 +64,11 @@ export const getCustomerDashboard = async (
     return res.status(200).json({
       success: true,
       stats: {
-        upcomingAppointments:
-          (countByStatus.CONFIRMED ?? 0) + (countByStatus.RESCHEDULED ?? 0),
+        upcomingAppointments: upcomingCount,
         todayAppointments: await prisma.appointment.count({
           where: {
             customerId: req.user.userId,
-            scheduledStart: { gte: startOfToday, lt: startOfTomorrow },
+            status: { not: "CANCELLED" }, scheduledStart: { gte: startOfToday, lt: startOfTomorrow },
           },
         }),
         completedAppointments: countByStatus.COMPLETED ?? 0,
@@ -299,7 +268,7 @@ export const cancelCustomerAppointment = async (req: AuthenticatedRequest, res: 
     const { appointment, previousStart } = await changeCustomerAppointment(appointmentOwner(req), {
       action: "cancel", reason: typeof reason === "string" ? reason.trim() || null : null,
     });
-    void notifyCustomerAppointmentChanged(appointment, "CANCELLED", previousStart);
+    await notifyAppointmentChanged(appointment, "CANCELLED", previousStart);
     return res.json({ success: true, appointment: customerAppointmentDetails(appointment) });
   } catch (error) {
     return appointmentError(res, error);
@@ -313,7 +282,7 @@ export const rescheduleCustomerAppointment = async (req: AuthenticatedRequest, r
   }
   try {
     const { appointment, previousStart } = await changeCustomerAppointment(appointmentOwner(req), { action: "reschedule", startsAt: new Date(value) });
-    void notifyCustomerAppointmentChanged(appointment, "RESCHEDULED", previousStart);
+    await notifyAppointmentChanged(appointment, "RESCHEDULED", previousStart);
     return res.json({ success: true, appointment: customerAppointmentDetails(appointment) });
   } catch (error) {
     return appointmentError(res, error);

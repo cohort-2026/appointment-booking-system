@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { CalendarClock, History } from "lucide-react";
 import { formatSast, sastDate } from "../../lib/bookingTime";
 import { ApiError } from "../../services/api";
@@ -149,19 +149,27 @@ function Reschedule({ appointment, onSaved }: Props) {
 export default function AppointmentManagement({ appointment, onSaved }: Props) {
   const { canCancel, canReschedule, changeDeadline, changeBlockReason, phone } = appointment;
   const actionsAvailable = canCancel || canReschedule;
+  const blockReasonId = useId();
+  const rescheduleReasonId = useId();
   const events = appointment.events ?? [];
   return <div className="grid items-start gap-5">
     <section aria-labelledby="manage-appointment" className="space-y-3 rounded-2xl border bg-card p-5">
       <h2 id="manage-appointment" className="text-lg font-semibold">Manage appointment</h2>
       {actionsAvailable
         ? <p className="text-sm text-muted-foreground">Online changes are available until {formatSast(changeDeadline)}.</p>
-        : <p className="text-sm text-muted-foreground">{changeBlockReason}</p>}
-      {canCancel && !canReschedule && <p className="text-sm text-muted-foreground">Online rescheduling is unavailable for this appointment.</p>}
+        : <p id={blockReasonId} className="text-sm text-muted-foreground">{changeBlockReason ?? "Online changes are unavailable for this appointment."}</p>}
+      {canCancel && !canReschedule && <p id={rescheduleReasonId} className="text-sm text-muted-foreground">Online rescheduling is unavailable for this appointment.</p>}
       {phone && <p className="text-sm text-muted-foreground">Provider contact <a className="font-medium underline" href={`tel:${phone}`}>{phone}</a></p>}
-      {actionsAvailable && <div className="flex flex-wrap gap-3 pt-1">
-        {canReschedule && <Reschedule appointment={appointment} onSaved={onSaved} />}
-        {canCancel && <Cancellation appointment={appointment} onSaved={onSaved} />}
-      </div>}
+      <div className="flex flex-wrap gap-3 pt-1">
+        {canReschedule
+          ? <Reschedule appointment={appointment} onSaved={onSaved} />
+          : <Button disabled aria-describedby={canCancel ? rescheduleReasonId : blockReasonId}>
+            <CalendarClock aria-hidden="true" />Reschedule
+          </Button>}
+        {canCancel
+          ? <Cancellation appointment={appointment} onSaved={onSaved} />
+          : <Button variant="outline" disabled aria-describedby={blockReasonId}>Cancel appointment</Button>}
+      </div>
     </section>
     {events.length > 0 && <section aria-labelledby="appointment-history" className="space-y-3 rounded-2xl border bg-card p-5">
       <h2 id="appointment-history" className="flex items-center gap-2 text-lg font-semibold"><History className="size-4" aria-hidden="true" />Appointment history</h2>

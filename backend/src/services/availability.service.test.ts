@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { generateAppointmentSlots, intersectAvailabilityWindows, parseLocalDate, timeRangesOverlap, type AvailabilityWindow } from "./availability.service.js";
-import { bookingDate, bookingMinute, bookingWeekday, bookingTimeLabel } from "../lib/time.js";
+import { bookingMonthBounds, bookingDate, bookingMinute, bookingWeekday, bookingTimeLabel } from "../lib/time.js";
 const monday: AvailabilityWindow = { dayOfWeek: 1, startTime: "09:00", endTime: "12:00", active: true };
 const at = (time: string) => new Date(`2030-01-07T${time}:00+02:00`);
 const base = { date: "2030-01-07", durationMinutes: 45, availability: [monday], bookedRanges: [], now: new Date("2029-01-01Z") };
@@ -57,4 +57,10 @@ test("effective business hours intersect staff hours; absent staff hours inherit
   assert.deepEqual(intersectAvailabilityWindows([monday], [], 1), [monday]);
   assert.deepEqual(intersectAvailabilityWindows([monday], [{ ...window, active: false }], 1), []);
   assert.deepEqual(generateAppointmentSlots({ ...base, availability: [] }), []);
+});
+
+test("Johannesburg month bounds agree at UTC month and year boundaries", () => {
+  const { start, end } = bookingMonthBounds(new Date("2026-12-31T22:30:00Z"));
+  assert.equal(start.toISOString(), "2026-12-31T22:00:00.000Z");
+  assert.equal(end.toISOString(), "2027-01-31T22:00:00.000Z");
 });

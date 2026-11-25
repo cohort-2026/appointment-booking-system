@@ -1,7 +1,7 @@
+import { getAppointmentEvents } from "../controllers/appointment-status.controller.js";
 import { Router } from "express";
 import {
   getCustomerDashboard,
-  updateCustomerProfile,
   getCustomerAppointment,
   getCustomerAppointments,
   createCustomerAppointment,
@@ -14,7 +14,6 @@ import { authenticate, requireRole } from "../middleware/auth.middleware.js";
 const router: ReturnType<typeof Router> = Router();
 
 router.get("/dashboard", authenticate, requireRole("CUSTOMER"), getCustomerDashboard);
-router.patch("/profile", authenticate, requireRole("CUSTOMER"), updateCustomerProfile);
 router.get("/appointments", authenticate, requireRole("CUSTOMER"), getCustomerAppointments);
 router.get("/appointments/:id", authenticate, requireRole("CUSTOMER"), getCustomerAppointment);
 router.post("/appointments", authenticate, requireRole("CUSTOMER"), createCustomerAppointment);
@@ -22,5 +21,7 @@ router.post("/appointments", authenticate, requireRole("CUSTOMER"), createCustom
 router.get("/appointments/:id/reschedule-options", authenticate, requireRole("CUSTOMER"), getCustomerRescheduleOptions);
 router.patch("/appointments/:id/cancel", authenticate, requireRole("CUSTOMER"), cancelCustomerAppointment);
 router.patch("/appointments/:id/reschedule", authenticate, requireRole("CUSTOMER"), rescheduleCustomerAppointment);
+
+router.get("/appointments/:id/events", authenticate, requireRole("CUSTOMER"), getAppointmentEvents("CUSTOMER"));
 
 export default router;

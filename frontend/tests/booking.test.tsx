@@ -6,15 +6,23 @@ import { AuthProvider } from '../src/context/AuthContext';
 import AppRoutes from '../src/routes/AppRoutes';
 import { safeCustomerReturnPath, finishVerifiedBooking } from '../src/lib/bookingFlow';
 import { parseBookingDraft, saveBookingDraft } from '../src/lib/bookingDraft';
-const date=new Date(Date.now()+86_400_000+7_200_000).toISOString().slice(0,10);
+const date=new Date(Date.now()+3*86_400_000+7_200_000).toISOString().slice(0,10);
 const start=(time:string)=>new Date(`${date}T${time}:00+02:00`).toISOString();
 const customer={id:'customer',email:'c@test.invalid',firstName:'Test',role:'CUSTOMER'};
 let loggedIn=false,kind='business',posts:Record<string,unknown>[]=[],conflict=false,details=0,availabilityFails=false;
+let movedTo: string | null = null;
+let cancelled = false;
+let moveConflict = false;
+let insideCutoff = false;
+const cancellationReasons: string[] = [];
+const moveAttempts: string[] = [];
 function provider(){return {id:`${kind}:provider`,kind:kind==='business'?'BUSINESS':'SOLE_PROVIDER',name:'Test Studio',category:'Wellness',description:'Consultations',city:'Johannesburg',hours:'Mon-Sun 09:00-17:00',initials:'TS',status:'Closed',services:[{id:'service',name:'Consultation',description:'Full visit',duration:120,price:300,bookable:true}]};}
 function Location(){return <output data-testid="location">{useLocation().pathname}</output>;}
 function mount(path:string){return render(<MemoryRouter initialEntries={[path]}><AuthProvider><AppRoutes/><Location/></AuthProvider></MemoryRouter>);}
 beforeEach(()=>{
   localStorage.clear();loggedIn=false;kind='business';posts=[];conflict=false;details=0;availabilityFails=false;
+  movedTo=null;cancelled=false;moveConflict=false;insideCutoff=false;
+  cancellationReasons.length=0;moveAttempts.length=0;
   vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
     const url=new URL(String(input),'http://localhost'),path=decodeURIComponent(url.pathname);
     const json=(body:unknown,status=200)=>Promise.resolve(new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}}));
@@ -31,8 +39,52 @@ beforeEach(()=>{
       if(conflict&&posts.length===1)return json({message:'That time was just booked'},409);
       return json({appointment:{id:'saved',startsAt:body.startsAt,status:'CONFIRMED'}},201);
     }
+    const savedStart = String(posts.at(-1)?.startsAt ?? start('09:00'));
+    const bookedTime = movedTo ?? savedStart;
+    const status = cancelled ? 'CANCELLED' : movedTo ? 'RESCHEDULED' : 'CONFIRMED';
+    const active = !cancelled && !insideCutoff;
+    const event = (type: string, oldScheduledStart: string | null, newScheduledStart: string, reason: string | null = null) => ({
+      id: type, type, actor: 'CUSTOMER', createdAt: new Date().toISOString(), oldScheduledStart, newScheduledStart, reason,
+    });
+    const appointment = () => ({
+      id:'saved',time:movedTo ?? savedStart,endsAt:new Date(Date.parse(movedTo ?? savedStart)+7_200_000).toISOString(),
+      service:'Consultation',durationMinutes:120,price:'300',status:cancelled ? 'CANCELLED' : movedTo ? 'RESCHEDULED' : 'CONFIRMED',
+      timeZone:'Africa/Johannesburg',customerNotes:posts.at(-1)?.customerNotes??null,providerName:'Test Studio',providerId:`${kind}:provider`,
+      staffName:kind==='business'?'Sam Staff':null,address:'Johannesburg',phone:null,cancellationCutoffHours:24,
+      changeDeadline:new Date(Date.parse(bookedTime)-86_400_000).toISOString(),
+      canCancel:active && !cancelled,canReschedule:active && !cancelled,
+      changeBlockReason:cancelled ? 'This appointment is closed.' : insideCutoff ? 'The deadline for online changes has passed.' : null,
+      events:[
+        event('CREATED',null,savedStart),
+        ...(movedTo ? [event('RESCHEDULED',savedStart,movedTo)] : []),
+        ...(cancelled ? [event('CANCELLED',bookedTime,bookedTime,cancellationReasons.at(-1))] : []),
+      ],
+    });
+    if(path==='/api/customer/appointments' && init?.method!=='POST'){
+      const entry={id:'saved',time:bookedTime,service:'Consultation',providerName:'Test Studio',status};
+      return json(cancelled ? {upcoming:[],past:[entry]} : {upcoming:[entry],past:[]});
+    }
+    if(path==='/api/customer/appointments/saved/reschedule-options'){
+      return json({slots:['09:15','09:30'].map(time=>({
+        startsAt:start(time),endsAt:new Date(Date.parse(start(time))+7_200_000).toISOString(),
+        label:`${time} SAST`,status:moveConflict && moveAttempts.length && time==='09:15' ? 'BOOKED' : 'AVAILABLE',
+      }))});
+    }
+    if(path==='/api/customer/appointments/saved/reschedule' && init?.method==='PATCH'){
+      const {startsAt}=JSON.parse(init.body as string);
+      moveAttempts.push(startsAt);
+      if(moveConflict && moveAttempts.length===1)return json({message:'That time is no longer available. Choose another slot.'},409);
+      movedTo=startsAt;
+      return json({appointment:appointment()});
+    }
+    if(path==='/api/customer/appointments/saved/cancel' && init?.method==='PATCH'){
+      cancellationReasons.push(JSON.parse(init.body as string).reason);
+      cancelled=true;
+      return json({appointment:appointment()});
+    }
     if(path==='/api/customer/appointments/saved'){
-      details++;return json({appointment:{id:'saved',time:posts.at(-1)?.startsAt??start('09:00'),endsAt:new Date(Date.parse(start('09:00'))+7_200_000).toISOString(),service:'Consultation',durationMinutes:120,price:'300',status:'CONFIRMED',timeZone:'Africa/Johannesburg',customerNotes:posts.at(-1)?.customerNotes??null,providerName:'Test Studio',providerId:`${kind}:provider`,staffName:kind==='business'?'Sam Staff':null,address:'Johannesburg',phone:null,cancellationCutoffHours:24,changeDeadline:new Date(Date.parse(start('09:00'))-86_400_000).toISOString()}});
+      details++;
+      return json({appointment:appointment()});
     }
     return json({message:`Unexpected API ${path}`},404);
   }));
@@ -86,6 +138,7 @@ describe('shared booking journey',()=>{
 it('authentication return paths support both entry points and reject external redirects',()=>{
   expect(safeCustomerReturnPath('/dashboard/customer/book/business%3Aprovider')).toBe('/dashboard/customer/book/business%3Aprovider');
   expect(safeCustomerReturnPath('/providers/sole%3Aprovider')).toBe('/providers/sole%3Aprovider');
+  expect(safeCustomerReturnPath('/dashboard/customer/appointments/saved')).toBe('/dashboard/customer/appointments/saved');
   for(const path of ['https://evil.invalid','//evil.invalid','/\\evil.invalid','/dashboard/business'])expect(safeCustomerReturnPath(path)).toBeNull();
 });
 it('verified signup uses saved notes and routes only to a persisted confirmation',async()=>{
@@ -105,9 +158,67 @@ it('shows a disabled recovery start and enables the boundary after it', async ()
   await user.click(await screen.findByRole('button', { name: /Consultation/ }));
   await user.click(screen.getByRole('button', { name: 'Choose a time', exact: true }));
   fireEvent.change(screen.getByLabelText('Choose a date'), { target: { value: date } });
-  const recovery = await screen.findByText('Recovery until 11:15');
-  const blockedStart = recovery.closest('button');
-  expect(blockedStart?.textContent).toContain('11:00 SAST');
-  expect(blockedStart?.disabled).toBe(true);
+  const blockedStart = await screen.findByRole<HTMLButtonElement>('button', { name: '11:00 SAST', exact: true });
+  expect(blockedStart.disabled).toBe(true);
+  expect(screen.queryByText(/recovery/i)).toBeNull();
   expect(screen.getByRole<HTMLButtonElement>('button', { name: '11:15 SAST', exact: true }).disabled).toBe(false);
+});
+
+it('books, reopens from My appointments, reschedules after a conflict, and cancels the same appointment', async () => {
+  loggedIn = true;
+  moveConflict = true;
+  const user = userEvent.setup();
+  mount('/dashboard/customer/book/business%3Aprovider');
+  await choose(user);
+  await user.click(screen.getByRole('button', {name:'Confirm appointment',exact:true}));
+  await screen.findByRole('heading', {name:'Appointment confirmed'});
+  await user.click(screen.getByRole('link', {name:/Back to appointments/}));
+  await user.click(await screen.findByRole('link', { name: 'Consultation', exact: true }));
+  await user.click(await screen.findByRole('button', {name:'Reschedule',exact:true}));
+  const dialog = within(await screen.findByRole('dialog'));
+  expect(dialog.queryByLabelText('Choose a staff member')).toBeNull();
+  await user.click(await dialog.findByRole('button', {name:'09:15 SAST',exact:true}));
+  await user.click(dialog.getByRole('button', {name:'Confirm reschedule'}));
+  expect((await dialog.findByRole('alert')).textContent).toContain('no longer available');
+  expect(dialog.getByText(/Current time.*09:00/)).toBeTruthy();
+  await user.click(await dialog.findByRole('button', {name:'09:30 SAST',exact:true}));
+  await user.click(dialog.getByRole('button', {name:'Confirm reschedule'}));
+  await screen.findByText('Appointment rescheduled.');
+  expect(moveAttempts).toEqual([start('09:15'),start('09:30')]);
+  expect(screen.getByTestId('location').textContent).toBe('/dashboard/customer/appointments/saved');
+
+  await user.click(screen.getByRole('button',{name:'Cancel appointment',exact:true}));
+  const cancel = within(await screen.findByRole('alertdialog'));
+  expect(cancel.getByText(/Consultation with Test Studio.*09:30/)).toBeTruthy();
+  await user.type(cancel.getByLabelText('Reason for cancellation (optional)'),'Work conflict');
+  await user.click(cancel.getByRole('button',{name:'Confirm cancellation'}));
+  await screen.findByText('Appointment cancelled.');
+  const history = within(screen.getByRole('region',{name:'Appointment history'}));
+  expect(history.getByText('Work conflict')).toBeTruthy();
+  expect(history.getByText(/09:00.*→.*09:30/)).toBeTruthy();
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Reschedule', exact: true }).disabled).toBe(true);
+  expect(posts).toHaveLength(1);
+  cleanup();
+  mount('/dashboard/customer/appointments/saved');
+  await screen.findByText('This appointment is closed.');
+  expect(cancellationReasons).toEqual(['Work conflict']);
+});
+
+it('explains the server cutoff and leaves both unavailable actions visible and disabled', async () => {
+  loggedIn = true;
+  insideCutoff = true;
+  mount('/dashboard/customer/appointments/saved');
+  await screen.findByText('The deadline for online changes has passed.');
+  expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Reschedule', exact: true }).disabled).toBe(true);
+  const cancel = screen.getByRole<HTMLButtonElement>('button', { name: 'Cancel appointment', exact: true });
+  expect(cancel.disabled).toBe(true);
+  expect(document.getElementById(cancel.getAttribute('aria-describedby') ?? '')?.textContent)
+    .toBe('The deadline for online changes has passed.');
+});
+
+it('sends legacy management links to sign-in without loading a booking', async () => {
+  mount('/manage/legacy-token');
+  await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/login'));
+  expect(details).toBe(0);
+  expect(screen.queryByText('legacy-token')).toBeNull();
 });

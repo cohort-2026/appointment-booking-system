@@ -1,11 +1,7 @@
 import type { BookingSlot, BookingStaffOption } from "../../services/bookings";
-import { BOOKING_TIME_ZONE, formatSast, sastDate, sastDateLimit } from "../../lib/bookingTime";
+import { sastDate, sastDateLimit } from "../../lib/bookingTime";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-
-const recoveryTime = new Intl.DateTimeFormat("en-ZA", {
-  timeZone: BOOKING_TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-});
 
 /** Shared by public/dashboard booking; S2 can reuse this with its authorized availability response. */
 export default function SlotPicker(props: {
@@ -30,17 +26,14 @@ export default function SlotPicker(props: {
       : <fieldset><legend className="mb-3 font-semibold">Choose a start time</legend><div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {props.slots.map(slot => <button key={slot.startsAt} type="button" disabled={props.disabled || slot.status !== "AVAILABLE"}
           aria-pressed={props.selected === slot.startsAt} onClick={() => props.onSelect(slot.startsAt)}
-          className={`min-h-12 rounded-xl border p-3 text-sm font-semibold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${props.selected === slot.startsAt ? "border-sky-700 bg-sky-700 text-white" : "border-slate-200 hover:border-sky-600"}`}>
+          className={`min-h-12 rounded-xl border p-3 text-sm font-semibold disabled:cursor-not-allowed ${slot.status === "BOOKED" && slot.recoveryUntil
+            ? "border-amber-300 bg-amber-100 text-amber-950"
+            : props.selected === slot.startsAt
+              ? "border-sky-700 bg-sky-700 text-white disabled:bg-slate-100 disabled:text-slate-500"
+              : "border-slate-200 enabled:hover:border-sky-600 disabled:bg-slate-100 disabled:text-slate-500"}`}>
           {slot.label}
-          {slot.recoveryUntil
-            ? <span className="block rounded bg-amber-100 px-1 py-0.5 text-xs text-amber-900">
-                Recovery until {sastDate(new Date(slot.startsAt)) === sastDate(new Date(slot.recoveryUntil))
-                  ? recoveryTime.format(new Date(slot.recoveryUntil))
-                  : formatSast(slot.recoveryUntil)}
-              </span>
-            : slot.status === "BOOKED" && <span className="block text-xs">Unavailable</span>}
         </button>)}
       </div></fieldset>}
-    <p className="text-xs leading-5 text-slate-500">Starts are offered every 15 minutes. After an appointment ends, the calendar reserves at least 15 minutes for recovery.</p>
+    <p className="text-xs leading-5 text-slate-500">Starts are offered every 15 minutes.</p>
   </div>;
 }

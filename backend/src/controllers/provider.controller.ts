@@ -1,3 +1,4 @@
+import { bookingDate, DAY_MS, parseBookingDate } from "../lib/time.js";
 import { MIN_RECOVERY_MINUTES } from "../lib/booking-buffer.js";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
@@ -298,10 +299,8 @@ export const getProviderDashboard = async (req: AuthenticatedRequest, res: Respo
     }
 
     const now = new Date();
-    const startOfToday = new Date(now);
-    startOfToday.setHours(0, 0, 0, 0);
-    const startOfTomorrow = new Date(startOfToday);
-    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+    const startOfToday = parseBookingDate(bookingDate(now))!;
+    const startOfTomorrow = new Date(+startOfToday + DAY_MS);
 
     const [
       todayBookings,
@@ -314,11 +313,11 @@ export const getProviderDashboard = async (req: AuthenticatedRequest, res: Respo
       prisma.appointment.count({
         where: {
           soleProviderId: soleProvider.id,
-          scheduledStart: { gte: startOfToday, lt: startOfTomorrow },
+          status: { not: "CANCELLED" }, scheduledStart: { gte: startOfToday, lt: startOfTomorrow },
         },
       }),
       prisma.appointment.count({
-        where: { soleProviderId: soleProvider.id, scheduledStart: { gte: now }, status: "CONFIRMED" },
+        where: { soleProviderId: soleProvider.id, scheduledStart: { gte: now }, status: { in: ["CONFIRMED", "RESCHEDULED"] } },
       }),
       prisma.appointment.count({
         where: { soleProviderId: soleProvider.id, status: "COMPLETED" },
@@ -327,7 +326,7 @@ export const getProviderDashboard = async (req: AuthenticatedRequest, res: Respo
         where: { soleProviderId: soleProvider.id, status: "CANCELLED" },
       }),
       prisma.appointment.findMany({
-        where: { soleProviderId: soleProvider.id, scheduledStart: { gte: now }, status: "CONFIRMED" },
+        where: { soleProviderId: soleProvider.id, scheduledStart: { gte: now }, status: { in: ["CONFIRMED", "RESCHEDULED"] } },
         orderBy: { scheduledStart: "asc" },
         take: 5,
         include: {
@@ -403,9 +402,18 @@ export const changeProviderSubscription = async (req: AuthenticatedRequest, res:
       return res.status(401).json({ success: false, message: "Authentication required" });
     }
 
-    const { tier } = req.body as { tier?: unknown };
+    const tier: unknown = req.body?.tier;
     if (tier !== "BASIC" && tier !== "GROWTH") {
       return res.status(400).json({ success: false, message: "Select a valid provider plan" });
+    }
+
+    // No payment gateway is connected. Reject before any subscription mutation.
+    if (tier === "GROWTH") {
+      return res.status(403).json({
+        success: false,
+        code: "PAID_UPGRADES_UNAVAILABLE",
+        message: "Paid upgrades are not available yet. Your current plan has not changed.",
+      });
     }
 
     const provider = await getSoleProvider(req.user.userId);
@@ -424,7 +432,7 @@ export const changeProviderSubscription = async (req: AuthenticatedRequest, res:
       }),
     ]);
 
-    if (!selectedPackage) {
+    if (!selectedPackage || Number(selectedPackage.monthlyPrice) !== 0) {
       return res.status(500).json({ success: false, message: "Selected provider plan is not available" });
     }
 
@@ -445,7 +453,6 @@ export const changeProviderSubscription = async (req: AuthenticatedRequest, res:
     const now = new Date();
     const nextBillingDate = new Date(now);
     nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
-    const isPaidPlan = Number(selectedPackage.monthlyPrice) > 0;
     const isUpgrade =
       currentSubscription !== null &&
       Number(selectedPackage.monthlyPrice) > Number(currentSubscription.package.monthlyPrice);
@@ -467,7 +474,7 @@ export const changeProviderSubscription = async (req: AuthenticatedRequest, res:
           maxStaff: selectedPackage.maxStaff,
           billingStartDate: now,
           nextBillingDate,
-          paymentStatus: isPaidPlan ? "PENDING" : "PAID",
+          paymentStatus: "PAID", // Basic is free.
           upgradedAt: isUpgrade ? now : null,
         },
       });
@@ -536,7 +543,7 @@ export const getProviderAppointments = async (req: AuthenticatedRequest, res: Re
           ? ["COMPLETED"] as const
           : status === "CANCELLED"
             ? ["CANCELLED"] as const
-            : null;
+            : status === "NO_SHOW" ? ["NO_SHOW"] as const : null;
 
     if (!statusFilter) {
       return res.status(400).json({ success: false, message: "Invalid appointment status filter" });
@@ -567,45 +574,5 @@ export const getProviderAppointments = async (req: AuthenticatedRequest, res: Re
   } catch (error) {
     console.error("Provider appointments fetch failed:", error);
     return res.status(500).json({ success: false, message: "Unable to load appointments" });
-  }
-};
-
-export const updateProviderAppointmentStatus = async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: "Authentication required" });
-    }
-
-    const { status } = req.body as { status?: unknown };
-    if (status !== "COMPLETED" && status !== "CANCELLED") {
-      return res.status(400).json({ success: false, message: "Invalid appointment status" });
-    }
-
-    const appointmentId = req.params.id;
-    if (typeof appointmentId !== "string") {
-      return res.status(400).json({ success: false, message: "Invalid appointment ID" });
-    }
-
-    const provider = await getSoleProvider(req.user.userId);
-    if (!provider) {
-      return res.status(404).json({ success: false, message: "Sole provider profile not found" });
-    }
-
-    const updated = await prisma.appointment.updateMany({
-      where: {
-        id: appointmentId,
-        soleProviderId: provider.id,
-        status: { in: ["CONFIRMED", "RESCHEDULED"] },
-      },
-      data: { status },
-    });
-    if (updated.count === 0) {
-      return res.status(404).json({ success: false, message: "Upcoming appointment not found" });
-    }
-
-    return res.status(200).json({ success: true });
-  } catch (error) {
-    console.error("Provider appointment status update failed:", error);
-    return res.status(500).json({ success: false, message: "Unable to update appointment" });
   }
 };
