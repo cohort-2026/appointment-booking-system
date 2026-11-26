@@ -138,7 +138,7 @@ describe('shared booking journey',()=>{
     expect(screen.getByTestId('location').textContent).toBe('/dashboard/customer/appointments/saved');
     cleanup();mount('/dashboard/customer/appointments/saved?confirmed=1');await screen.findByRole('heading',{name:'Appointment confirmed'});expect(details).toBe(2);expect(posts).toHaveLength(2);
   });
-  it('books once after inline sign-in and opens the customer dashboard', async () => {
+  it('books once after inline sign-in and opens the saved appointment confirmation', async () => {
     kind = 'sole';
     const user = userEvent.setup();
     mount('/providers/sole%3Aprovider');
@@ -148,7 +148,9 @@ describe('shared booking journey',()=>{
     await user.type(dialog.getByLabelText('Email'), 'test@example.invalid');
     await user.type(dialog.getByLabelText('Password'), 'password');
     await user.click(dialog.getByRole('button', { name: 'Sign in and book' }));
-    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/dashboard/customer'));
+    await screen.findByRole('heading', { name: 'Appointment confirmed' });
+    expect(screen.getByTestId('location').textContent).toBe('/dashboard/customer/appointments/saved');
+    expect(details).toBe(1);
     expect(posts).toHaveLength(1);
     expect(posts[0]).toMatchObject({ startsAt: start('09:00') });
   });

@@ -117,11 +117,7 @@ function JourneyForm({ provider, dashboard, inlineBooking, setInlineBooking }: {
       const response = await createAppointment({ providerId: provider.id, serviceId, startsAt, customerNotes: notes,
         ...(business ? { staffId } : {}) });
       clearBookingDraft();
-      if (afterInlineSignIn) {
-        toast.success("Appointment confirmed.");
-        navigate("/dashboard/customer", { replace: true });
-        return;
-      }
+      if (afterInlineSignIn) toast.success("Appointment confirmed.");
       navigate(`/dashboard/customer/appointments/${encodeURIComponent(response.appointment.id)}?confirmed=1`, { replace: true });
     } catch (reason) {
       if (reason instanceof ApiError && reason.status === 401) {
