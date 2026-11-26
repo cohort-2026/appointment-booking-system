@@ -129,8 +129,7 @@ describe('shared booking journey',()=>{
     conflict=true;const user=userEvent.setup();mount('/providers/business%3Aprovider');
     await choose(user);await user.type(screen.getByLabelText('Notes for the provider (optional)'),'Please call');
     await user.click(screen.getByRole('button',{name:'Sign in to book',exact:true}));
-    const dialog=within(await screen.findByRole('dialog'));await user.type(dialog.getByLabelText('Email'),'test@example.invalid');await user.type(dialog.getByLabelText('Password'),'password');await user.click(dialog.getByRole('button',{name:'Sign in',exact:true}));
-    const confirm=await screen.findByRole('button',{name:'Confirm appointment',exact:true});await waitFor(()=>expect((confirm as HTMLButtonElement).disabled).toBe(false));await user.click(confirm);
+    const dialog=within(await screen.findByRole('dialog'));await user.type(dialog.getByLabelText('Email'),'test@example.invalid');await user.type(dialog.getByLabelText('Password'),'password');await user.click(dialog.getByRole('button',{name:'Sign in and book',exact:true}));
     await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('just booked'));expect(posts).toHaveLength(1);
     await user.click(await screen.findByRole('button',{name:'09:15 SAST',exact:true}));await user.click(screen.getByRole('button',{name:'Review booking'}));
     expect((screen.getByLabelText('Notes for the provider (optional)') as HTMLTextAreaElement).value).toBe('Please call');
@@ -138,6 +137,20 @@ describe('shared booking journey',()=>{
     await screen.findByRole('heading',{name:'Appointment confirmed'});expect(posts[1]).toMatchObject({staffId:'staff-record',customerNotes:'Please call',startsAt:start('09:15')});expect(details).toBe(1);
     expect(screen.getByTestId('location').textContent).toBe('/dashboard/customer/appointments/saved');
     cleanup();mount('/dashboard/customer/appointments/saved?confirmed=1');await screen.findByRole('heading',{name:'Appointment confirmed'});expect(details).toBe(2);expect(posts).toHaveLength(2);
+  });
+  it('books once after inline sign-in and opens the customer dashboard', async () => {
+    kind = 'sole';
+    const user = userEvent.setup();
+    mount('/providers/sole%3Aprovider');
+    await choose(user);
+    await user.click(screen.getByRole('button', { name: 'Sign in to book', exact: true }));
+    const dialog = within(await screen.findByRole('dialog'));
+    await user.type(dialog.getByLabelText('Email'), 'test@example.invalid');
+    await user.type(dialog.getByLabelText('Password'), 'password');
+    await user.click(dialog.getByRole('button', { name: 'Sign in and book' }));
+    await waitFor(() => expect(screen.getByTestId('location').textContent).toBe('/dashboard/customer'));
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({ startsAt: start('09:00') });
   });
   it('dashboard discovery and sole-provider booking remain in shell without staff selection',async()=>{
     loggedIn=true;kind='sole';const user=userEvent.setup();mount('/dashboard/customer/book');

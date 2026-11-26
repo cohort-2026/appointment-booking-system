@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from "react";
+import toast from "react-hot-toast";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { ApiError } from "../../services/api";
@@ -13,14 +14,30 @@ import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 
+type InlineBooking = {
+  customerId: string;
+  providerId: string;
+  serviceId: string;
+  staffId: string;
+  startsAt: string;
+};
+
 export default function BookingJourney(props: { provider: Provider; dashboard: boolean }) {
   const { user, loading } = useAuth();
+  const [inlineBooking, setInlineBooking] = useState<InlineBooking | null>(null);
   if (loading) return <p role="status">Restoring your account…</p>;
   if (user && user.role !== "CUSTOMER") return <p className="rounded-xl bg-amber-50 p-5">Please use a customer account to book an appointment.</p>;
-  return <JourneyForm key={`${props.provider.id}:${user?.id ?? "guest"}`} {...props} />;
+  return <JourneyForm key={`${props.provider.id}:${user?.id ?? "guest"}`} {...props}
+    inlineBooking={inlineBooking?.customerId === user?.id && inlineBooking?.providerId === props.provider.id ? inlineBooking : null}
+    setInlineBooking={setInlineBooking} />;
 }
 
-function JourneyForm({ provider, dashboard }: { provider: Provider; dashboard: boolean }) {
+function JourneyForm({ provider, dashboard, inlineBooking, setInlineBooking }: {
+  provider: Provider;
+  dashboard: boolean;
+  inlineBooking: InlineBooking | null;
+  setInlineBooking: (booking: InlineBooking | null) => void;
+}) {
   const { user, login } = useAuth();
   const navigate = useNavigate();
   const [draft] = useState(() => {
@@ -86,7 +103,7 @@ function JourneyForm({ provider, dashboard }: { provider: Provider; dashboard: b
     return () => { active = false; };
   }, [provider.id, serviceId, date, staffId, business, key]);
 
-  async function confirm() {
+  async function confirm(afterInlineSignIn = false) {
     if (submitting.current || !service || !validSlot || loading) return;
     if (Date.parse(startsAt) <= Date.now()) { setStartsAt(""); setStep(2); setReload(n => n + 1); setNotice("That time has passed. Please choose another."); return; }
     const saved = saveBookingDraft({ version: 1, providerId: provider.id, serviceId, date, startsAt, source,
@@ -100,6 +117,11 @@ function JourneyForm({ provider, dashboard }: { provider: Provider; dashboard: b
       const response = await createAppointment({ providerId: provider.id, serviceId, startsAt, customerNotes: notes,
         ...(business ? { staffId } : {}) });
       clearBookingDraft();
+      if (afterInlineSignIn) {
+        toast.success("Appointment confirmed.");
+        navigate("/dashboard/customer", { replace: true });
+        return;
+      }
       navigate(`/dashboard/customer/appointments/${encodeURIComponent(response.appointment.id)}?confirmed=1`, { replace: true });
     } catch (reason) {
       if (reason instanceof ApiError && reason.status === 401) {
@@ -111,9 +133,30 @@ function JourneyForm({ provider, dashboard }: { provider: Provider; dashboard: b
       setReload(n => n + 1);
     } finally { submitting.current = false; setBusy(false); }
   }
+  // The account change remounts the form. Resume only the selection explicitly
+  // approved in the inline dialog, after the new session has rechecked availability.
+  const confirmAfterSignIn = useEffectEvent(() => {
+    if (!inlineBooking) return;
+    setInlineBooking(null);
+    if (inlineBooking.serviceId === serviceId && inlineBooking.staffId === staffId &&
+        inlineBooking.startsAt === startsAt && validSlot) {
+      void confirm(true);
+    }
+  });
+  useEffect(() => {
+    if (inlineBooking && !loading) confirmAfterSignIn();
+  }, [inlineBooking, loading]);
+
   async function signInSubmit(event: FormEvent) {
-    event.preventDefault(); setLoginBusy(true); setLoginError("");
-    try { await login(email.trim(), password); }
+    event.preventDefault();
+    if (loginBusy || loading || !validSlot) return;
+    setLoginBusy(true); setLoginError("");
+    try {
+      const signedInUser = await login(email.trim(), password);
+      if (signedInUser.role === "CUSTOMER") {
+        setInlineBooking({ customerId: signedInUser.id, providerId: provider.id, serviceId, staffId, startsAt });
+      }
+    }
     catch (reason) {
       const verificationEmail = getVerificationEmail(reason);
       if (verificationEmail) navigate("/verify-email", { state: { email: verificationEmail, returnTo } });
@@ -144,7 +187,7 @@ function JourneyForm({ provider, dashboard }: { provider: Provider; dashboard: b
           <p className="mt-2 text-right text-xs text-slate-500">{Array.from(notes).length}/500</p>
           <p className="mt-4 rounded-xl bg-sky-50 p-4 text-sm text-sky-900">Changes must be requested at least {data?.cancellationCutoffHours ?? 24} hours before the appointment. No online payment is collected.</p>
           {loading && <p role="status" className="mt-3">Rechecking your selected time…</p>}{error && <p role="alert" className="mt-3 text-rose-700">{error} <button className="underline" onClick={() => setReload(n => n + 1)}>Retry</button></p>}
-          <Button className="mt-5 min-h-12 w-full" disabled={!validSlot || loading || busy} onClick={() => void confirm()}>{busy ? "Saving appointment…" : user ? "Confirm appointment" : "Sign in to book"}</Button></>}
+          <Button className="mt-5 min-h-12 w-full" disabled={!validSlot || loading || busy || !!inlineBooking} onClick={() => void confirm()}>{busy || inlineBooking ? "Saving appointment…" : user ? "Confirm appointment" : "Sign in to book"}</Button></>}
       </div>
       <aside aria-label="Booking summary" className="rounded-2xl bg-slate-950 p-5 text-white lg:sticky lg:top-24"><p className="text-xs font-semibold uppercase tracking-widest text-sky-300">Your appointment</p>
         <h2 className="mt-3 text-xl font-bold">{provider.name}</h2><p className="mt-1 text-sm text-slate-300">{business ? "Business" : "Independent provider"}</p>
@@ -155,11 +198,11 @@ function JourneyForm({ provider, dashboard }: { provider: Provider; dashboard: b
           <div className="border-t border-white/20 pt-4"><dt className="text-slate-400">Service price</dt><dd className="mt-1 text-xl font-bold">{data ? (data.service.expectedPrice === null ? "On request" : `R${Number(data.service.expectedPrice).toFixed(2)}`) : service?.price != null ? `R${service.price.toFixed(2)}` : "On request"}</dd></div></dl>
       </aside>
     </div>
-    <Dialog open={signIn} onOpenChange={setSignIn}><DialogContent><DialogHeader><DialogTitle>Sign in to book</DialogTitle><DialogDescription>Your selection is saved. We’ll check the time again after sign-in.</DialogDescription></DialogHeader>
+    <Dialog open={signIn} onOpenChange={open => { if (!loginBusy) setSignIn(open); }}><DialogContent><DialogHeader><DialogTitle>Sign in to book</DialogTitle><DialogDescription>We’ll recheck your selected time and confirm the appointment after you sign in.</DialogDescription></DialogHeader>
       <form onSubmit={signInSubmit} className="space-y-4">{loginError && <p role="alert" className="text-rose-700">{loginError}</p>}
         <label className="block space-y-2">Email<Input type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} /></label>
         <label className="block space-y-2">Password<Input type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label>
-        <Button className="w-full" disabled={loginBusy}>{loginBusy ? "Signing in…" : "Sign in"}</Button>
+        <Button className="w-full" disabled={loginBusy}>{loginBusy ? "Signing in…" : "Sign in and book"}</Button>
         <p className="text-sm">New here? <Link className="font-semibold text-sky-700 underline" to={`/register/customer?returnTo=${encodeURIComponent(returnTo)}`}>Create a customer account</Link></p>
       </form></DialogContent></Dialog>
   </section>;

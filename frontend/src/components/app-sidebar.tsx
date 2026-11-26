@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Calendar, CreditCard, Home, Settings, Users, Scissors, DollarSign, ShieldCheck, Clock, LogOut } from "lucide-react"
+import { Calendar, CalendarPlus, CreditCard, Home, Settings, Users, Scissors, DollarSign, ShieldCheck, Clock, LogOut } from "lucide-react"
 import { NavMain } from "./nav-main"
 import { TeamSwitcher } from "./team-switcher"
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarRail } from "@/components/ui/sidebar"
@@ -18,7 +18,7 @@ const getNavItems = (role: UserRole) => {
     case "customer":
       return [
         ...common,
-        { title: "Book a Service", url: "/dashboard/customer/book", icon: <Scissors /> },
+        { title: "Book a Service", url: "/dashboard/customer/book", icon: <CalendarPlus /> },
         { title: "My Profile", url: "/dashboard/customer/profile", icon: <Users /> },
       ]
     case "staff":
