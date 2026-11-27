@@ -4,6 +4,7 @@ import { fetchAppointment, type SavedAppointment } from "../../../services/booki
 import AppointmentManagement from "../../../components/booking/AppointmentManagement";
 import BookingConfirmation from "../../../components/booking/BookingConfirmation";
 import { Button } from "../../../components/ui/button";
+import { DashboardSkeleton } from "../../../components/dashboard/DashboardSkeleton";
 
 export default function AppointmentDetails() {
   const { id = "" } = useParams();
@@ -20,7 +21,7 @@ export default function AppointmentDetails() {
     return () => { active = false; };
   }, [id, key]);
   return <div className="space-y-5"><Link className="text-sm font-semibold text-sky-700" to="/dashboard/customer/appointments">← Back to appointments</Link>
-    {result.key !== key ? <p role="status" className="animate-pulse rounded-2xl bg-white p-10">Loading your saved appointment…</p>
+    {result.key !== key ? <DashboardSkeleton detail label="Loading your saved appointment" />
       : result.error || !result.data ? <section className="rounded-2xl border bg-white p-6"><h1 className="text-xl font-bold">Unable to display appointment</h1><p role="alert" className="my-4">{result.error ?? "Appointment not found"}</p><Button variant="outline" onClick={() => setRetry(n => n + 1)}>Try again</Button></section>
       : <>
         {result.notice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 font-medium text-emerald-900">{result.notice}</p>}

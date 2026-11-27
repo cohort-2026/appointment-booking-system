@@ -12,6 +12,10 @@ export interface Appointment {
   durationMinutes: number
   price: string | null
   status: string
+  endsAt?: string | null
+  providerId?: string | null
+  staffId?: string | null
+  bufferAfterMinutes?: number
 }
 
 interface AppointmentCardProps {

@@ -70,6 +70,9 @@ export async function finishVerifiedBooking(
   if (!saveBookingDraft(boundDraft)) {
     return { destination: recoveryPath, message: "Email verified, but your browser could not preserve the booking. Please choose it again.", error: true };
   }
+  if (draft.mode) {
+    return { destination: recoveryPath, message: "Email verified. Review your selected times to complete your booking.", error: false };
+  }
   if (isBookingDraftExpired(draft) || !draft.startsAt || Date.parse(draft.startsAt) <= Date.now()) {
     return { destination: recoveryPath, message: "Email verified. Your saved selection needs an available time before it can be booked.", error: true };
   }

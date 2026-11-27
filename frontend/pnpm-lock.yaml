@@ -17,6 +17,9 @@ importers:
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
       cn:
         specifier: ^0.5.2
         version: 0.5.2
@@ -47,6 +50,9 @@ importers:
       sonner:
         specifier: ^2.0.8
         version: 2.0.8(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      tailwind-merge:
+        specifier: ^3.7.1
+        version: 3.7.1
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
@@ -2672,6 +2678,9 @@ packages:
     engines: {node: '>=10.0.0'}
     os: [darwin, linux, win32, freebsd, openbsd, netbsd, sunos, android]
     hasBin: true
+
+  tailwind-merge@3.7.1:
+    resolution: {integrity: sha512-v7y4BV4FUlO8exj/4M5UXKeoowDiuugVUg3tkMNIyOUCOHy5xp8+5aWQeXCtZ2491sUV1YPsVeM9EveZ6/xuZQ==}
 
   tailwindcss@4.3.3:
     resolution: {integrity: sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ==}
@@ -5515,6 +5524,8 @@ snapshots:
   strip-final-newline@4.0.0: {}
 
   systeminformation@5.33.23: {}
+
+  tailwind-merge@3.7.1: {}
 
   tailwindcss@4.3.3: {}
 

@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { apiFetch } from "../../services/api";
 import type { AppointmentEvent } from "../../services/bookings";
 import { formatSast } from "../../lib/bookingTime";
 import { Button } from "../ui/button";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "../ui/sheet";
+import { Skeleton } from "../ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "../ui/dialog";
 
 const actionLabels = { COMPLETED: "Mark completed", NO_SHOW: "Mark no-show", CANCELLED: "Cancel appointment" };
 const actorLabels: Record<string, string> = { OWNER: "Business owner", STAFF: "Staff", PROVIDER: "Provider", CUSTOMER: "Customer", SYSTEM: "System" };
@@ -11,9 +12,10 @@ type Action = keyof typeof actionLabels;
 type History = { events: AppointmentEvent[]; allowedStatuses: Action[] };
 const readable = (value: string) => (value === "CREATED" ? "Booked" : value.toLowerCase().replaceAll("_", " "));
 
-export default function AppointmentHistoryDrawer({ id, role, title, startsAt, onSaved }: {
+export default function AppointmentHistoryDrawer({ id, role, title, startsAt, onSaved, trigger }: {
   id: string; role: "business" | "provider" | "staff"; title: string; startsAt: string;
   onSaved: (status: Action) => void;
+  trigger?: ReactElement;
 }) {
   const [open, setOpen] = useState(false);
   const [history, setHistory] = useState<History | null>(null);
@@ -52,22 +54,26 @@ export default function AppointmentHistoryDrawer({ id, role, title, startsAt, on
     }
   }
 
-  return <Sheet open={open} onOpenChange={next => {
+  return <Dialog open={open} onOpenChange={next => {
     if (saving) return;
     if (next) { setHistory(null); setError(""); setAction(null); setReason(""); }
     setOpen(next);
   }}>
-    <SheetTrigger asChild><Button variant="outline" size="sm">Details</Button></SheetTrigger>
-    <SheetContent className="w-full" showCloseButton={!saving}>
-      <SheetHeader>
-        <SheetTitle>{title}</SheetTitle>
-        <SheetDescription>{formatSast(startsAt)}</SheetDescription>
-      </SheetHeader>
-      <div className="space-y-4 px-4 pb-6">
+    <DialogTrigger asChild>{trigger ?? <Button variant="outline" size="sm">Details</Button>}</DialogTrigger>
+    <DialogContent className="sm:max-w-xl" showCloseButton={!saving}>
+      <DialogHeader>
+        <DialogTitle>{title}</DialogTitle>
+        <DialogDescription>{formatSast(startsAt)}</DialogDescription>
+      </DialogHeader>
+      <div className="space-y-4">
         {error && <p role="alert" className="text-destructive">{error}</p>}
         {!history ? error
           ? <Button variant="outline" onClick={() => { setError(""); setRetry(value => value + 1); }}>Try again</Button>
-          : <p role="status">Loading appointment history…</p>
+          : <div role="status" aria-label="Loading appointment history" aria-busy="true" className="space-y-5">
+            <div className="flex gap-2"><Skeleton className="h-9 w-28" /><Skeleton className="h-9 w-24" /></div>
+            <Skeleton className="h-5 w-40" />
+            {[0, 1, 2].map(item => <div key={item} className="space-y-2 border-b pb-3 last:border-0"><Skeleton className="h-4 w-28" /><Skeleton className="h-3 w-3/4" /></div>)}
+          </div>
           : <>
             {history.allowedStatuses.length > 0 && <div className="flex flex-wrap gap-2">
               {history.allowedStatuses.map(status => <Button key={status} variant="outline" disabled={saving}
@@ -93,6 +99,6 @@ export default function AppointmentHistoryDrawer({ id, role, title, startsAt, on
               </li>)}</ol>}
           </>}
       </div>
-    </SheetContent>
-  </Sheet>;
+    </DialogContent>
+  </Dialog>;
 }

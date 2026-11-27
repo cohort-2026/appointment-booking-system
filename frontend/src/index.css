@@ -7,6 +7,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@keyframes reminder-sweep {
+  0%, 83% { left: -25%; opacity: 0; }
+  84% { opacity: 1; }
+  99% { left: 100%; opacity: 1; }
+  100% { left: 100%; opacity: 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reminder-glow { animation: reminder-sweep 6s linear infinite; }
+}
+
 :root {
   /* Brand and application tokens */
   --background: #f4f7fb;

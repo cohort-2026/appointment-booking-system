@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiFetch } from "../../../services/api";
+import { Card } from "@/components/ui/card";
 
 const ACCENT_FROM = "#0EA5E9";
 const ACCENT_TO = "#38BDF8";
@@ -404,7 +405,7 @@ export default function BusinessServices() {
 
         <div className="p-4 sm:p-6 lg:p-8">
           {/* Information Tip with Vector Icon */}
-          <div className="mb-6 flex items-start gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 p-4 text-xs text-sky-900 sm:text-sm">
+          <div className="mb-6 flex items-start gap-3 rounded-lg border border-sky-100 bg-sky-50/70 p-4 text-xs text-sky-900 sm:text-sm">
             <span className="text-[#0EA5E9] mt-0.5">
               <Icons.Info />
             </span>
@@ -417,25 +418,25 @@ export default function BusinessServices() {
 
           {/* Quick Metrics Bar (With Skeletons) */}
           <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <Card className="gap-0 overflow-hidden rounded-lg py-0 shadow-sm"><div className="h-1.5 bg-primary" /><div className="p-4">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Services</p>
               <p className="mt-1 text-2xl font-bold text-slate-900">
                 {fetching ? <span className="inline-block h-6 w-8 animate-pulse rounded bg-slate-200" /> : services.length}
               </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            </div></Card>
+            <Card className="gap-0 overflow-hidden rounded-lg py-0 shadow-sm"><div className="h-1.5 bg-primary" /><div className="p-4">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active for Booking</p>
               <p className="mt-1 text-2xl font-bold text-emerald-600">
                 {fetching ? <span className="inline-block h-6 w-8 animate-pulse rounded bg-slate-200" /> : activeCount}
               </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            </div></Card>
+            <Card className="gap-0 overflow-hidden rounded-lg py-0 shadow-sm"><div className="h-1.5 bg-primary" /><div className="p-4">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Paused Services</p>
               <p className="mt-1 text-2xl font-bold text-slate-500">
                 {fetching ? <span className="inline-block h-6 w-8 animate-pulse rounded bg-slate-200" /> : inactiveCount}
               </p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            </div></Card>
+            <Card className="gap-0 overflow-hidden rounded-lg py-0 shadow-sm"><div className="h-1.5 bg-primary" /><div className="p-4">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Staff Allocation</p>
               <button
                 onClick={() => navigate("/dashboard/business/staff")}
@@ -443,11 +444,13 @@ export default function BusinessServices() {
               >
                 Assign to Staff →
               </button>
-            </div>
+            </div></Card>
           </section>
 
           {/* Search, Filter Toolbar & Standardized "Add Service" Button Placement */}
-          <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <Card className="mb-6 gap-0 overflow-hidden rounded-lg py-0 shadow-sm">
+            <div className="h-1.5 bg-primary" />
+            <section className="flex flex-col gap-4 bg-sky-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative flex-1 max-w-md">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
                 <Icons.Search />
@@ -462,7 +465,7 @@ export default function BusinessServices() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 <button
                   onClick={() => setStatusFilter("ALL")}
                   className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
@@ -504,13 +507,14 @@ export default function BusinessServices() {
                 <span>Add Service</span>
               </button>
             </div>
-          </section>
+            </section>
+          </Card>
 
           {/* Skeleton Loaders or Live Services Grid */}
           {fetching ? (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="animate-pulse rounded-3xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                <div key={i} className="animate-pulse rounded-lg border border-slate-200 bg-white p-6 shadow-sm space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="h-5 w-36 rounded bg-slate-200" />
                     <div className="h-4 w-14 rounded-full bg-slate-200" />
@@ -531,7 +535,7 @@ export default function BusinessServices() {
               ))}
             </div>
           ) : filteredServices.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center shadow-sm">
+            <div className="rounded-lg border border-dashed border-slate-300 bg-white p-12 text-center shadow-sm">
               <h3 className="font-bold text-slate-900">No Services Found</h3>
               <p className="mt-1 text-xs text-slate-500">
                 {searchQuery
@@ -550,15 +554,16 @@ export default function BusinessServices() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredServices.map((svc) => (
-                <div
+                <Card
                   key={svc.id}
-                  className={`flex flex-col justify-between rounded-3xl border bg-white p-6 shadow-sm transition hover:shadow-md ${
+                  className={`gap-0 overflow-hidden rounded-lg py-0 shadow-sm transition hover:shadow-md ${
                     svc.active ? "border-slate-200" : "border-slate-200/60 opacity-75 bg-slate-50/40"
                   }`}
                 >
-                  <div>
-                    <div className="flex items-start justify-between gap-3">
-                      <h3 className="font-bold text-slate-900 text-lg leading-snug">{svc.name}</h3>
+                  <div className="h-1.5 bg-primary" />
+                  <div className="flex flex-1 flex-col">
+                    <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-sky-50/50 p-4">
+                      <h3 className="min-w-0 break-words font-bold text-slate-900 text-lg leading-snug">{svc.name}</h3>
                       <span
                         className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
                           svc.active
@@ -570,14 +575,13 @@ export default function BusinessServices() {
                       </span>
                     </div>
 
-                    <p className="mt-2.5 text-xs text-slate-500 line-clamp-3 leading-relaxed">
+                    <p className="px-4 pt-4 text-xs text-slate-500 line-clamp-3 leading-relaxed">
                       {svc.description || "No description provided for this service."}
                     </p>
-                  </div>
 
-                  <div className="mt-6 border-t border-slate-100 pt-4">
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <div className="flex items-center gap-1.5 font-medium text-slate-500">
+                  <div className="mt-auto p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-600">
+                      <div className="flex min-w-0 items-center gap-1.5 font-medium text-slate-500">
                         <Icons.Clock />
                         <span>{svc.durationMinutes} mins + {svc.bufferAfterMinutes ?? 15} mins cleanup</span>
                       </div>
@@ -606,7 +610,8 @@ export default function BusinessServices() {
                       </button>
                     </div>
                   </div>
-                </div>
+                  </div>
+                </Card>
               ))}
             </div>
           )}

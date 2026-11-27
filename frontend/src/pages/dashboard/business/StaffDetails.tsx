@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiFetch } from "../../../services/api";
+import { DashboardSkeleton } from "@/components/dashboard/DashboardSkeleton";
 
 type ServiceItem = {
   id: string;
@@ -155,16 +156,8 @@ export default function StaffDetails() {
     }
   };
 
-  if (loading || fetching || !staff) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F4F7FB]">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#0EA5E9] border-t-transparent" />
-          <p className="text-sm font-medium text-slate-500">Loading staff profile...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading || fetching) return <DashboardSkeleton detail label="Loading staff profile" />;
+  if (!staff) return <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-5 text-sm text-red-800">Staff profile could not be loaded.</p>;
 
   return (
     <div className="min-h-screen bg-[#F4F7FB] p-4 sm:p-6 lg:p-10 text-slate-900">

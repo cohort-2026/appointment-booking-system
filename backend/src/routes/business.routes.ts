@@ -6,6 +6,7 @@ import {
 	getBusinessAvailability,
 	getBusinessServices,
 	getBusinessStaff,
+	getBusinessStaffCalendar,
 	getBusinessProfile,
 	inviteBusinessStaff,
 	updateBusinessProfile,
@@ -28,6 +29,7 @@ router.post("/services", authenticate, requireRole("BUSINESS_OWNER"), createBusi
 router.put("/services/:serviceId", authenticate, requireRole("BUSINESS_OWNER"), updateBusinessService);
 router.patch("/services/:serviceId/toggle", authenticate, requireRole("BUSINESS_OWNER"), setBusinessServiceActive);
 router.get("/staff", authenticate, requireRole("BUSINESS_OWNER"), getBusinessStaff);
+router.get("/staff/:staffId/calendar", authenticate, requireRole("BUSINESS_OWNER"), getBusinessStaffCalendar);
 router.post("/staff/invitations", authenticate, requireRole("BUSINESS_OWNER"), inviteBusinessStaff);
 router.get("/profile", authenticate, requireRole("BUSINESS_OWNER"), getBusinessProfile);
 router.patch("/profile", authenticate, requireRole("BUSINESS_OWNER"), updateBusinessProfile);

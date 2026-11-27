@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../../hooks/useAuth";
 import { useBusinessDashboard } from "../../../context/BusinessDashboardContext";
 import { formatBusinessName } from "../../../lib/formatBusinessName";
+import { Card, CardContent } from "@/components/ui/card";
 
 const ACCENT_FROM = "#0EA5E9";
 const ACCENT_TO = "#38BDF8";
@@ -236,12 +237,9 @@ export default function BusinessDashboard() {
 
         <div className="p-4 sm:p-6 lg:p-8">
           {/* Welcome Banner */}
-          <section className="relative mb-8 overflow-hidden rounded-3xl bg-[#0B1220] p-6 text-white sm:p-8">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full opacity-20 blur-[80px]"
-              style={{ background: ACCENT_FROM }}
-            />
+          <section className="relative mb-8 overflow-hidden rounded-lg bg-[#0B1220] p-6 text-white sm:p-8">
+            <span aria-hidden="true" className="pointer-events-none absolute -right-10 -top-10 size-36 rounded-full bg-white/20" />
+            <span aria-hidden="true" className="pointer-events-none absolute right-16 top-14 size-10 rounded-full bg-white/10" />
             <div className="relative flex flex-col justify-between gap-5 md:flex-row md:items-center">
               <div>
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-sky-300">
@@ -321,8 +319,9 @@ export default function BusinessDashboard() {
           {/* 2-Column Main Section */}
           <div className="grid gap-6 xl:grid-cols-3">
             {/* Left 2 Cols: Today's Appointments */}
-            <section className="rounded-3xl border border-slate-200 bg-white shadow-sm xl:col-span-2">
-              <div className="flex items-center justify-between border-b border-slate-100 p-6">
+            <Card className="gap-0 rounded-lg py-0 shadow-sm xl:col-span-2">
+              <div className="h-1.5 bg-primary" />
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-sky-50/50 p-5">
                 <div>
                   <h2 className="font-bold text-slate-900">Today's Schedule Queue</h2>
                   <p className="mt-0.5 text-xs text-slate-500">Live booking progression across all providers</p>
@@ -359,7 +358,7 @@ export default function BusinessDashboard() {
                   appointments.map((appointment) => (
                     <div
                       key={appointment.id}
-                      className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"
+                      className="m-4 flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4 sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="flex items-center gap-4">
                         <div className="w-16">
@@ -405,11 +404,12 @@ export default function BusinessDashboard() {
                   ))
                 )}
               </div>
-            </section>
+            </Card>
 
             {/* Right Column: Staff Roster */}
-            <section className="rounded-3xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-100 p-6">
+            <Card className="gap-0 rounded-lg py-0 shadow-sm">
+              <div className="h-1.5 bg-primary" />
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-sky-50/50 p-5">
                 <div>
                   <h2 className="font-bold text-slate-900">Staff Availability</h2>
                   <p className="mt-0.5 text-xs text-slate-500">Live roster &amp; daily loads</p>
@@ -443,7 +443,7 @@ export default function BusinessDashboard() {
                   </div>
                 ) : (
                   staff.map((member) => (
-                    <div key={member.id} className="p-5">
+                    <div key={member.id} className="m-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sky-50 text-sm font-semibold text-sky-700">
@@ -478,13 +478,13 @@ export default function BusinessDashboard() {
                   ))
                 )}
               </div>
-            </section>
+            </Card>
           </div>
 
           {/* Bottom Grid: Active Package & Quick Actions */}
           <section className="mt-6 grid gap-6 md:grid-cols-2">
             {/* Active Subscription Summary (With Skeleton) */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <Card className="gap-0 rounded-lg py-0 shadow-sm"><div className="h-1.5 bg-primary" /><CardContent className="p-6">
               {fetching ? (
                 <div className="space-y-4 animate-pulse">
                   <div className="h-4 w-24 rounded bg-slate-200" />
@@ -532,10 +532,10 @@ export default function BusinessDashboard() {
                   </button>
                 </>
               )}
-            </div>
+            </CardContent></Card>
 
             {/* Quick Actions Shortcuts */}
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <Card className="gap-0 rounded-lg py-0 shadow-sm"><div className="h-1.5 bg-primary" /><CardContent className="p-6">
               <h2 className="font-bold text-slate-900">Quick Actions</h2>
               <p className="mt-0.5 text-xs text-slate-500">Fast paths for common administrative tasks</p>
 
@@ -569,7 +569,7 @@ export default function BusinessDashboard() {
                   <span>Profile Settings</span>
                 </button>
               </div>
-            </div>
+            </CardContent></Card>
           </section>
         </div>
 
@@ -602,7 +602,7 @@ function StatCard({
   alert?: boolean;
 }) {
   return (
-    <div className={`rounded-2xl border bg-white p-5 shadow-sm ${alert ? "border-amber-300" : "border-slate-200"}`}>
+    <Card className={`gap-0 overflow-hidden rounded-lg py-0 shadow-sm ${alert ? "ring-amber-300" : ""}`}><div className={`h-1.5 ${alert ? "bg-rose-400" : "bg-primary"}`} /><CardContent className="p-5">
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{title}</p>
@@ -616,6 +616,6 @@ function StatCard({
           <Icon />
         </div>
       </div>
-    </div>
+    </CardContent></Card>
   );
 }

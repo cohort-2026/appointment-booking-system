@@ -8,7 +8,7 @@ import {
   requireCustomerChange, saveAppointmentTransition, type CustomerAppointment,
 } from "./appointment-lifecycle.service.js";
 import {
-  BookingError, isBookingWriteConflict, requireCustomerTimeAvailable, resolveBookingAvailability,
+  BookingError, isBookingWriteConflict, requireCustomerDailyCapacity, requireCustomerTimeAvailable, resolveBookingAvailability,
 } from "./booking.service.js";
 
 type Owner = { id: string; customerId: string };
@@ -85,6 +85,7 @@ export async function changeCustomerAppointment(owner: Owner, change: Change) {
       if (slot?.status !== "AVAILABLE") {
         throw new BookingError("That time is no longer available. Choose another slot.", 409);
       }
+      await requireCustomerDailyCapacity(tx, appointment.customerId, change.startsAt, 1, appointment.id);
       await requireCustomerTimeAvailable(tx, appointment.customerId, change.startsAt, service.durationMinutes, appointment.id);
       const saved = await saveAppointmentTransition(tx, appointment, {
         type: "RESCHEDULED", startsAt: change.startsAt, endsAt: new Date(slot.endsAt),

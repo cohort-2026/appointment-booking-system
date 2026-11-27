@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAdminDashboard, runAdminJobs, type AdminJobResult, type AdminStats } from "../../../services/admin";
 
 export default function AdminDashboard() {
@@ -37,7 +38,7 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Admin overview</h1>
-      {!overview && <p role="status">Loading overview…</p>}
+      {!overview && <div role="status" aria-label="Loading overview" aria-busy="true" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[0, 1, 2, 3].map(item => <Card key={item}><CardHeader><Skeleton className="h-4 w-28" /></CardHeader><CardContent><Skeleton className="h-8 w-16" /></CardContent></Card>)}</div>}
       {overview && "error" in overview && (
         <div className="flex flex-wrap items-center gap-3">
           <p role="alert">{overview.error}</p>

@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiFetch } from "../../../services/api";
-import { Calendar } from "lucide-react";
+import { ArrowRight, Calendar, CalendarDays, CalendarCheck, CalendarClock, CalendarX, Search, UserRound } from "lucide-react";
 
 import { NextAppointmentBanner, type UpcomingAppointment } from "@/components/booking/NextAppointmentBanner";
-import { StatCard } from "@/components/dashboard/StatCard"
 import { AppointmentCard } from "@/components/appointment/AppointmentCard"
+import { AppointmentList } from "@/components/appointment/AppointmentList"
 import type { Appointment } from "@/components/appointment/AppointmentCard"
 import { EmptyState } from "@/components/ui/empty-state"
 import { ErrorState } from "@/components/ui/error-state"
@@ -28,19 +28,25 @@ type DashboardResponse = {
 const dashboardLinks = [
   {
     to: "/dashboard/customer/book",
-    icon: "＋",
+    icon: Search,
+    header: "from-sky-400 via-sky-500 to-blue-700",
+    iconColor: "bg-sky-50 text-sky-700",
     title: "Find a service",
     description: "Browse providers and the services they offer.",
   },
   {
     to: "/dashboard/customer/appointments",
-    icon: "▣",
+    icon: CalendarDays,
+    header: "from-sky-400 via-sky-500 to-blue-700",
+    iconColor: "bg-sky-50 text-sky-700",
     title: "My appointments",
     description: "Review your upcoming and past visits.",
   },
   {
     to: "/dashboard/customer/profile",
-    icon: "◈",
+    icon: UserRound,
+    header: "from-teal-400 via-teal-500 to-emerald-700",
+    iconColor: "bg-teal-50 text-teal-700",
     title: "My profile",
     description: "View your personal and account details.",
   },
@@ -51,17 +57,27 @@ function QuickLinkCard({
   icon,
   title,
   description,
+  header,
+  iconColor,
 }: (typeof dashboardLinks)[number]) {
+  const Icon = icon;
   return (
     <Link
       to={to}
-      className="block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-sky-300 hover:shadow-md"
+      className="group block h-full rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2"
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-lg font-bold text-sky-700">
-        {icon}
-      </div>
-      <h3 className="mt-4 font-bold text-slate-900">{title}</h3>
-      <p className="mt-1 text-sm leading-5 text-slate-500">{description}</p>
+      <Card className="h-full gap-0 overflow-hidden rounded-lg py-0 transition duration-200 group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-slate-200/60">
+        <div className={`relative h-14 overflow-hidden bg-linear-to-br ${header}`}>
+          <span aria-hidden="true" className="absolute -right-7 -top-10 size-28 rounded-full bg-white/20" />
+          <span aria-hidden="true" className="absolute right-16 top-9 size-8 rounded-full bg-white/10" />
+        </div>
+        <CardContent className="flex flex-1 flex-col px-5 pb-5">
+          <span className={`mt-4 grid size-11 place-items-center rounded-lg ${iconColor}`}><Icon className="size-5" aria-hidden="true" /></span>
+          <h3 className="mt-4 font-semibold text-slate-900">{title}</h3>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">{description}</p>
+          <span className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-sky-700">Open <ArrowRight className="size-4" aria-hidden="true" /></span>
+        </CardContent>
+      </Card>
     </Link>
   );
 }
@@ -127,10 +143,10 @@ export default function CustomerDashboard() {
 
   const stats = dashboard?.stats;
   const statItems = [
-    { label: "Upcoming", value: stats?.upcomingAppointments },
-    { label: "Today", value: stats?.todayAppointments },
-    { label: "Completed", value: stats?.completedAppointments },
-    { label: "Cancelled", value: stats?.cancelledAppointments },
+    { label: "Upcoming", value: stats?.upcomingAppointments, icon: CalendarClock, header: "from-sky-400 via-sky-500 to-blue-700", iconColor: "bg-sky-50 text-sky-700" },
+    { label: "Today", value: stats?.todayAppointments, icon: CalendarDays, header: "from-sky-400 via-sky-500 to-blue-700", iconColor: "bg-sky-50 text-sky-700" },
+    { label: "Completed", value: stats?.completedAppointments, icon: CalendarCheck, header: "from-teal-400 via-teal-500 to-emerald-700", iconColor: "bg-teal-50 text-teal-700" },
+    { label: "Cancelled", value: stats?.cancelledAppointments, icon: CalendarX, header: "from-rose-300 via-rose-400 to-rose-600", iconColor: "bg-rose-50 text-rose-700" },
   ];
 
   return (
@@ -155,8 +171,8 @@ export default function CustomerDashboard() {
 
         {/* Just Booked Section */}
         {bookedAppointmentId && justBookedAppointment && (
-          <Card className="overflow-hidden rounded-2xl border-emerald-200 shadow-sm">
-            <CardHeader className="border-b border-emerald-100 bg-emerald-50 px-5 py-4 sm:px-6">
+          <Card className="gap-0 overflow-hidden rounded-lg border-emerald-200 py-0 shadow-sm">
+            <CardHeader className="border-b border-emerald-100 bg-linear-to-r from-teal-50 to-emerald-50 px-5 py-4 sm:px-6">
               <CardTitle className="text-sm font-bold text-emerald-900">Your appointment is booked</CardTitle>
               <p className="text-sm text-emerald-800">Here are the details you selected.</p>
             </CardHeader>
@@ -177,9 +193,17 @@ export default function CustomerDashboard() {
 
         {/* Stats Section */}
         <section aria-label="Appointment summary" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {statItems.map((item) => (
-            <StatCard key={item.label} label={item.label} value={item.value} loading={loading} />
-          ))}
+          {statItems.map((item) => {
+            const Icon = item.icon;
+            return <Card key={item.label} className="gap-0 overflow-hidden rounded-lg py-0 shadow-sm">
+              <div className={`h-1.5 bg-linear-to-r ${item.header}`} />
+              <CardContent className="flex items-start justify-between gap-3 p-5">
+                <div><p className="text-sm font-medium text-muted-foreground">{item.label} appointments</p>
+                  {loading ? <Skeleton className="mt-2 h-9 w-12 rounded" /> : <p className="mt-2 text-3xl font-bold text-slate-900">{item.value ?? "—"}</p>}</div>
+                <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${item.iconColor}`}><Icon className="size-5" aria-hidden="true" /></span>
+              </CardContent>
+            </Card>;
+          })}
         </section>
 
         {/* Quick Links Section */}
@@ -196,8 +220,9 @@ export default function CustomerDashboard() {
         </section>
 
         {/* Upcoming Appointments Section */}
-        <Card className="overflow-hidden rounded-2xl border-slate-200 shadow-sm">
-          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-6">
+        <Card className="gap-0 overflow-hidden rounded-lg py-0 shadow-sm">
+          <div className="h-1.5 bg-linear-to-r from-sky-400 via-sky-500 to-blue-700" />
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-sky-50/50 px-5 py-4 sm:px-6">
             <div>
               <CardTitle className="text-lg font-bold tracking-tight">Upcoming appointments</CardTitle>
               <p className="mt-1 text-sm text-slate-500">Your next scheduled visits.</p>
@@ -212,15 +237,7 @@ export default function CustomerDashboard() {
                 {[0, 1].map((item) => <Skeleton key={item} className="h-16 rounded-xl bg-slate-100" />)}
               </div>
             ) : dashboard?.upcomingAppointments.length ? (
-              <div className="divide-y divide-slate-100">
-                {dashboard.upcomingAppointments.map((appointment) => (
-                  <AppointmentCard
-                    key={appointment.id}
-                    appointment={appointment}
-                    href={`/dashboard/customer/appointments/${encodeURIComponent(appointment.id)}`}
-                  />
-                ))}
-              </div>
+              <AppointmentList appointments={dashboard.upcomingAppointments} />
             ) : dashboard ? (
               <EmptyState
                 icon={Calendar}

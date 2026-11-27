@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import toast from "react-hot-toast";
 import { apiFetch } from "../../../services/api";
 import { useAuth } from "../../../hooks/useAuth";
+import { Card } from "@/components/ui/card";
 
 type ProfileForm = {
   displayName: string;
@@ -162,8 +163,9 @@ export default function Profile() {
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 p-6">
+      <Card className="gap-0 overflow-hidden rounded-lg py-0 shadow-sm">
+        <div className="h-1.5 bg-primary" />
+        <div className="border-b border-slate-100 bg-sky-50/50 p-6">
           <h2 className="font-semibold text-slate-900">Provider information</h2>
         </div>
         {isEditing ? (
@@ -268,7 +270,7 @@ export default function Profile() {
             </div>
           </dl>
         )}
-      </section>
+      </Card>
     </div>
   );
 }

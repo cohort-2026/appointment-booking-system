@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Calendar } from "lucide-react";
 import { apiFetch } from "../../../services/api";
-import { AppointmentCard } from "@/components/appointment/AppointmentCard";
+import { AppointmentList } from "@/components/appointment/AppointmentList";
 import type { Appointment } from "@/components/appointment/AppointmentCard";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -44,12 +44,13 @@ export default function Appointments() {
         <Button asChild className="w-fit bg-sky-600 hover:bg-sky-700"><Link to="/dashboard/customer/book">＋ Find a service</Link></Button>
       </div>
 
-      <Card className="overflow-hidden rounded-2xl border-slate-200 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
+      <Card className="gap-0 overflow-hidden rounded-lg py-0 shadow-sm">
+        <div className="h-1.5 bg-linear-to-r from-sky-400 via-sky-500 to-blue-700" />
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 bg-sky-50/50 px-5 py-4 sm:px-6">
           <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)} className="w-full sm:w-auto">
             <TabsList className="bg-slate-100"><TabsTrigger value="Upcoming">Upcoming</TabsTrigger><TabsTrigger value="Past">Past</TabsTrigger><TabsTrigger value="All">All</TabsTrigger></TabsList>
           </Tabs>
-          <p className="text-sm text-slate-500">{loading ? "Loading…" : `${appointments.length} ${appointments.length === 1 ? "appointment" : "appointments"}`}</p>
+          {loading ? <Skeleton className="h-4 w-24" aria-label="Loading appointment count" /> : <p className="text-sm text-slate-500">{appointments.length} {appointments.length === 1 ? "appointment" : "appointments"}</p>}
         </div>
 
         {error && <ErrorState message={error} onRetry={fetchAppointments} />}
@@ -58,7 +59,7 @@ export default function Appointments() {
           {loading ? (
             <div className="space-y-3 p-5">{[0, 1, 2].map((item) => <Skeleton key={item} className="h-24 rounded-xl bg-slate-100" />)}</div>
           ) : appointments.length ? (
-            <div className="divide-y divide-slate-100">{appointments.map((appointment) => <AppointmentCard key={appointment.id} appointment={appointment} href={`/dashboard/customer/appointments/${encodeURIComponent(appointment.id)}`} />)}</div>
+            <AppointmentList appointments={appointments} />
           ) : (
             <EmptyState icon={Calendar} title={`No ${filter.toLowerCase()} appointments`} description="Your appointments will appear here when they are available." action={filter !== "Past" ? <Button asChild className="bg-sky-600 hover:bg-sky-700"><Link to="/dashboard/customer/book">Explore services</Link></Button> : undefined} />
           )}

@@ -1,4 +1,5 @@
-import { ArrowDownToLine, ArrowRight, RotateCcw } from "lucide-react";
+import { useState } from "react";
+import { ArrowDownToLine, ArrowRight, RotateCcw, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Appointment } from "../appointment/AppointmentCard";
 import { Button } from "../ui/button";
@@ -20,6 +21,8 @@ const timeFormat = new Intl.DateTimeFormat("en-ZA", {
 });
 
 export function NextAppointmentBanner({ appointment }: { appointment: UpcomingAppointment }) {
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  const reminderKey = `${appointment.id}:${appointment.time}`;
   const start = new Date(appointment.time);
   const time = timeFormat.format(start);
   const daysAway = Math.max(0, (Date.parse(sastDate(start)) - Date.parse(sastDate())) / 86_400_000);
@@ -28,12 +31,17 @@ export function NextAppointmentBanner({ appointment }: { appointment: UpcomingAp
   const { calendarUid } = appointment;
   const outline = "border-white/20 bg-white/5 text-white hover:bg-white/15 hover:text-white";
 
+  if (dismissedKey === reminderKey) return null;
+
   return (
     <section aria-labelledby="next-appointment" className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#071827] via-[#09243a] to-[#064b5c] p-5 text-white shadow-sm sm:p-6">
-      <div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-24 size-64 rounded-full bg-cyan-400/10 blur-3xl" />
+      <span aria-hidden="true" className="reminder-glow pointer-events-none absolute top-0 h-0.5 w-1/4 bg-gradient-to-r from-transparent via-cyan-200 to-transparent opacity-0 shadow-[0_0_12px_2px_rgba(103,232,249,0.65)]" />
+      <Button type="button" size="icon-sm" variant="ghost" aria-label="Dismiss appointment reminder" title="Dismiss reminder" onClick={() => setDismissedKey(reminderKey)} className="absolute right-3 top-3 z-10 text-white hover:bg-white/15 hover:text-white"><X aria-hidden="true" /></Button>
+      <span aria-hidden="true" className="pointer-events-none absolute -right-10 -top-10 size-36 rounded-full bg-white/20" />
+      <span aria-hidden="true" className="pointer-events-none absolute right-16 top-14 size-10 rounded-full bg-white/10" />
       <div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
         <div className="min-w-0">
-          <p className="inline-flex items-center gap-2 rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-100">
+          <p className="inline-flex max-w-[calc(100%-2.5rem)] items-center gap-2 rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-100">
             <span aria-hidden="true" className="size-1.5 rounded-full bg-cyan-300" />
             Your next appointment · {countdown}
           </p>

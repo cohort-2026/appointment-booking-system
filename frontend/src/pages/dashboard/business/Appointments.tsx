@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiFetch } from "../../../services/api";
+import { Card } from "@/components/ui/card";
 
 const ACCENT_FROM = "#0EA5E9";
 const ACCENT_TO = "#38BDF8";
@@ -306,9 +307,11 @@ export default function BusinessAppointments() {
 
         <div className="p-4 sm:p-6 lg:p-8">
           {/* Filter Bar */}
-          <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+          <Card className="mb-6 gap-0 overflow-hidden rounded-lg py-0 shadow-sm">
+            <div className="h-1.5 bg-primary" />
+            <section className="flex flex-col gap-4 bg-sky-50/50 p-4 md:flex-row md:items-center md:justify-between">
             {/* View Tabs */}
-            <div className="flex gap-1.5 rounded-xl bg-slate-100 p-1">
+            <div className="flex flex-wrap gap-1.5 rounded-lg bg-slate-100 p-1">
               {(["TODAY", "UPCOMING", "HISTORY"] as const).map((tab) => (
                 <button
                   key={tab}
@@ -370,14 +373,16 @@ export default function BusinessAppointments() {
                 />
               </div>
             </div>
-          </section>
+            </section>
+          </Card>
 
           {/* Appointments Table with Skeletons */}
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <Card className="gap-0 overflow-hidden rounded-lg py-0 shadow-sm">
+            <div className="h-1.5 bg-primary" />
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left text-sm">
+              <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/70 text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <tr className="border-b border-slate-200 bg-sky-50/50 text-xs font-bold uppercase tracking-wider text-slate-500">
                     <th className="px-6 py-4">Time &amp; Date</th>
                     <th className="px-6 py-4">Customer</th>
                     <th className="px-6 py-4">Service</th>
@@ -385,7 +390,7 @@ export default function BusinessAppointments() {
                     <th className="px-6 py-4 text-right">Status / Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-200">
                   {fetching ? (
                     // Skeleton Rows
                     Array.from({ length: 4 }).map((_, i) => (
@@ -473,7 +478,7 @@ export default function BusinessAppointments() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* Consistent Footer */}

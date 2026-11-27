@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
 
 export function RoleRoute({
   allowedRoles,
@@ -11,11 +12,7 @@ export function RoleRoute({
   const { user, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#F4F7FB]">
-        <p className="text-sm text-slate-500">Loading dashboard...</p>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (!user) {

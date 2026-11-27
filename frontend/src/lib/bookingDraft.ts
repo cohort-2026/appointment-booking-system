@@ -7,6 +7,8 @@ export type BookingDraft = {
   serviceId: string;
   date: string;
   startsAt?: string;
+  startsAtList?: string[];
+  mode?: "separate" | "combined";
   staffId?: string;
   customerId?: string;
   savedAt: number;
@@ -24,6 +26,11 @@ export function parseBookingDraft(raw: string | null): BookingDraft | null {
     if (typeof value.serviceId !== "string" || !value.serviceId) return null;
     if (typeof value.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.date)) return null;
     if (value.startsAt !== undefined && (typeof value.startsAt !== "string" || !Number.isFinite(Date.parse(value.startsAt)))) return null;
+    if (value.mode !== undefined || value.startsAtList !== undefined) {
+      if ((value.mode !== "separate" && value.mode !== "combined") || !Array.isArray(value.startsAtList) ||
+          value.startsAtList.length > 12 || value.startsAtList.some((start: unknown) => typeof start !== "string" || !Number.isFinite(Date.parse(start))) ||
+          new Set(value.startsAtList.map((start: string) => Date.parse(start))).size !== value.startsAtList.length || value.startsAt !== undefined) return null;
+    }
     for (const key of ["staffId", "customerId"]) {
       if (value[key] !== undefined && (typeof value[key] !== "string" || !value[key])) return null;
     }
@@ -33,6 +40,7 @@ export function parseBookingDraft(raw: string | null): BookingDraft | null {
       serviceId: value.serviceId,
       date: value.date,
       ...(value.startsAt ? { startsAt: value.startsAt } : {}),
+      ...(value.mode ? { mode: value.mode, startsAtList: value.startsAtList } : {}),
       ...(value.staffId ? { staffId: value.staffId } : {}),
       ...(value.customerId ? { customerId: value.customerId } : {}),
       // Legacy drafts have no timestamp: retain service information, but never auto-submit them.

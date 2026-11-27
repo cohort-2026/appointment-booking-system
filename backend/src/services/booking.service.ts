@@ -106,31 +106,99 @@ export type CreateBookingInput = {
   customerId: string; providerKind: "sole" | "business"; providerId: string;
   serviceId: string; startsAt: Date; staffId?: string; customerNotes?: string | null;
 };
-/** Shared by both entry points. The SERIALIZABLE transaction protects resource and customer overlap predicates. */
-export async function createBooking(input: CreateBookingInput, db: Pick<typeof prisma, "$transaction"> = prisma) {
+export type CreateMultipleBookingsInput = Omit<CreateBookingInput, "startsAt"> & {
+  startsAt: Date[]; mode: "separate" | "combined";
+};
+export const MAX_BOOKING_SLOTS = 12;
+export const MAX_DAILY_CUSTOMER_APPOINTMENTS = 3;
+
+export async function requireCustomerDailyCapacity(db: DatabaseClient, customerId: string, startsAt: Date, count: number, excludeAppointmentId?: string) {
+  const date = bookingDate(startsAt);
+  const day = parseBookingDate(date)!;
+  const existing = await db.appointment.count({ where: {
+    customerId, status: { in: ACTIVE_APPOINTMENT_STATUSES },
+    scheduledStart: { gte: day, lt: new Date(day.getTime() + DAY_MS) },
+    ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {}),
+  } });
+  if (existing + count > MAX_DAILY_CUSTOMER_APPOINTMENTS) {
+    throw new BookingError(`You can have at most 3 active appointments on ${date}.`, 409);
+  }
+}
+
+export async function createMultipleBookings(input: CreateMultipleBookingsInput, db: Pick<typeof prisma, "$transaction"> = prisma) {
+  if (!Array.isArray(input.startsAt) || input.startsAt.length < 1 || input.startsAt.length > MAX_BOOKING_SLOTS ||
+      (input.mode !== "separate" && input.mode !== "combined") ||
+      input.startsAt.some(start => !(start instanceof Date) || !Number.isFinite(start.getTime()))) {
+    throw new BookingError("Choose between 1 and 12 valid appointment times", 400);
+  }
+  const starts = [...input.startsAt].sort((first, second) => first.getTime() - second.getTime());
+  const date = bookingDate(starts[0]!);
+  if (new Set(starts.map(start => start.getTime())).size !== starts.length) {
+    throw new BookingError("Appointment times must be unique", 400);
+  }
+  if (input.mode === "combined" && starts.some(start => bookingDate(start) !== date)) {
+    throw new BookingError("Combined appointment times must be on the same date", 400);
+  }
   try {
   return await db.$transaction(async tx => {
     const customer = await tx.user.findFirst({ where: { id: input.customerId, role: "CUSTOMER", isVerified: true }, select: { id: true } });
     if (!customer) throw new BookingError("A verified customer account is required", 403);
-    const availability = await resolveBookingAvailability(tx, { ...input, date: bookingDate(input.startsAt) });
-    const slot = availability.slots.find(s => s.startsAt === input.startsAt.toISOString());
-    if (!slot || slot.status !== "AVAILABLE") throw new BookingError("That time is no longer available. Choose another slot.", 409);
-    const snapshot = createBookingSnapshot(input.startsAt, availability.service);
-    await requireCustomerTimeAvailable(tx, input.customerId, input.startsAt, availability.service.durationMinutes);
-    return tx.appointment.create({ data: { customerId: input.customerId, serviceId: input.serviceId,
-      scheduledStart: input.startsAt, ...snapshot, customerNotes: input.customerNotes ?? null,
+    const dates = [...new Set(starts.map(start => bookingDate(start)))];
+    const availabilityByDate = new Map<string, BookingAvailability>();
+    for (const selectedDate of dates) {
+      const availability = await resolveBookingAvailability(tx, { ...input, date: selectedDate });
+      availabilityByDate.set(selectedDate, availability);
+      const dayStarts = starts.filter(start => bookingDate(start) === selectedDate);
+      if (dayStarts.some(start => !availability.slots.some(slot => slot.startsAt === start.toISOString() && slot.status === "AVAILABLE"))) {
+        throw new BookingError("That time is no longer available. Choose another slot.", 409);
+      }
+      await requireCustomerDailyCapacity(tx, input.customerId, dayStarts[0]!, input.mode === "combined" ? 1 : dayStarts.length);
+    }
+    const { service } = availabilityByDate.get(date)!;
+    const interval = (service.durationMinutes + service.bufferAfterMinutes) * 60_000;
+    if (input.mode === "separate" && starts.some((start, index) => index > 0 &&
+        start.getTime() - starts[index - 1]!.getTime() < interval)) {
+      throw new BookingError("Selected appointment times overlap or do not allow recovery time.", 409);
+    }
+    if (input.mode === "combined" && starts.some((start, index) => index > 0 &&
+        start.getTime() - starts[index - 1]!.getTime() !== interval)) {
+      throw new BookingError("Combined appointment times must be consecutive", 400);
+    }
+    const duration = input.mode === "combined"
+      ? (starts.at(-1)!.getTime() - starts[0]!.getTime()) / 60_000 + service.durationMinutes
+      : service.durationMinutes;
+    const price = input.mode === "combined" ? service.expectedPrice?.mul(starts.length) ?? null : service.expectedPrice;
+    if (price?.abs().greaterThan("99999999.99")) {
+      throw new BookingError("The total price is too large to book", 422);
+    }
+    const appointmentStarts = input.mode === "combined" ? [starts[0]!] : starts;
+    for (const start of appointmentStarts) {
+      await requireCustomerTimeAvailable(tx, input.customerId, start, duration);
+    }
+    const appointments = [];
+    for (const start of appointmentStarts) {
+      const snapshot = createBookingSnapshot(start, { ...service, durationMinutes: duration, expectedPrice: price });
+      appointments.push(await tx.appointment.create({ data: { customerId: input.customerId, serviceId: input.serviceId,
+      scheduledStart: start, ...snapshot, customerNotes: input.customerNotes ?? null,
       ...(input.providerKind === "sole" ? { soleProviderId: input.providerId } : { businessId: input.providerId, staffId: input.staffId! }),
       events: { create: { type: "CREATED", actor: "CUSTOMER", actorUserId: input.customerId, newStatus: "CONFIRMED",
-        newScheduledStart: input.startsAt, newScheduledEnd: snapshot.scheduledEnd } } },
+        newScheduledStart: start, newScheduledEnd: snapshot.scheduledEnd } } },
       include: { service: { select: { name: true, durationMinutes: true } }, customer: { select: { firstName: true, email: true } },
         staff: { select: { user: { select: { firstName: true, lastName: true, email: true } } } },
         soleProvider: { select: { displayName: true, user: { select: { email: true } } } },
-        business: { select: { name: true, owner: { select: { email: true } } } } } });
+        business: { select: { name: true, owner: { select: { email: true } } } } } }));
+    }
+    return appointments;
   }, { isolationLevel: "Serializable", maxWait: 15_000, timeout: 20_000 });
   } catch (error) {
     if (isBookingWriteConflict(error)) throw new BookingError("That time was just booked. Please choose another slot.", 409);
     throw error;
   }
+}
+
+export async function createBooking(input: CreateBookingInput, db: Pick<typeof prisma, "$transaction"> = prisma) {
+  const appointments = await createMultipleBookings({ ...input, startsAt: [input.startsAt], mode: "separate" }, db);
+  return appointments[0]!;
 }
 
 /** Prisma's pg adapter may surface commit-time SQLSTATE directly rather than P2034. */

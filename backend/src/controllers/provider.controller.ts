@@ -559,7 +559,7 @@ export const getProviderAppointments = async (req: AuthenticatedRequest, res: Re
       orderBy: { scheduledStart: status === "UPCOMING" ? "asc" : "desc" },
       include: {
         customer: { select: { firstName: true, lastName: true, email: true } },
-        service: { select: { name: true } },
+        service: { select: { name: true, durationMinutes: true } },
       },
     });
 
@@ -569,6 +569,7 @@ export const getProviderAppointments = async (req: AuthenticatedRequest, res: Re
       customerEmail: appointment.customer.email,
       serviceName: appointment.service.name,
       date: appointment.scheduledStart,
+      endsAt: appointment.scheduledEnd ?? new Date(appointment.scheduledStart.getTime() + appointment.service.durationMinutes * 60_000),
       status: ["CONFIRMED", "RESCHEDULED"].includes(appointment.status) ? "UPCOMING" : appointment.status,
     })));
   } catch (error) {

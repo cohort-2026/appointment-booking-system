@@ -1,6 +1,6 @@
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "cn"
+import { cn } from "@/lib/utils"
 import { Slot } from "radix-ui"
 
 const buttonVariants = cva(
@@ -8,7 +8,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary bg-gradient-to-br from-[var(--primary-gradient-from)] to-[var(--primary-gradient-to)] text-primary-foreground hover:brightness-95",
+        default: "bg-linear-to-b from-(--primary-gradient-from) to-(--primary-gradient-to) text-primary-foreground hover:brightness-95",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:

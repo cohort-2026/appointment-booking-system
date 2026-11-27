@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import { apiFetch } from "../../../services/api";
+import { Card, CardContent } from "@/components/ui/card";
 
 type PlanTier = "BASIC" | "GROWTH";
 
@@ -101,8 +102,9 @@ export default function Package() {
       </div>
 
       {subscription ? (
-        <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col justify-between gap-4 border-b border-slate-100 p-6 sm:flex-row sm:items-center">
+        <Card className="mb-8 gap-0 overflow-hidden rounded-lg py-0 shadow-sm">
+          <div className="h-1.5 bg-primary" />
+          <div className="flex flex-col justify-between gap-4 border-b border-slate-100 bg-sky-50/50 p-6 sm:flex-row sm:items-center">
             <div>
               <p className="text-sm text-slate-500">Current plan</p>
               <h2 className="mt-1 text-2xl font-bold text-slate-900">{subscription.tier}</h2>
@@ -134,12 +136,12 @@ export default function Package() {
               </dd>
             </div>}
           </dl>
-        </section>
+        </Card>
       ) : (
-        <section className="mb-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <Card className="mb-8 gap-0 overflow-hidden rounded-lg py-0 shadow-sm"><div className="h-1.5 bg-primary" /><CardContent className="p-6">
           <h2 className="font-semibold text-slate-900">No active subscription</h2>
           <p className="mt-2 text-sm text-slate-500">Choose a plan below to activate your provider subscription.</p>
-        </section>
+        </CardContent></Card>
       )}
 
       <div className="mb-4">
@@ -158,12 +160,12 @@ export default function Package() {
             .map(([feature]) => featureLabels[feature]);
 
           return (
-            <section
+            <Card
               key={plan.tier}
-              className={`flex flex-col rounded-2xl border bg-white p-6 shadow-sm ${
-                isCurrent ? "border-sky-300 ring-1 ring-sky-200" : "border-slate-200"
-              }`}
+              className={`gap-0 overflow-hidden rounded-lg py-0 shadow-sm ${isCurrent ? "ring-1 ring-sky-300" : ""}`}
             >
+              <div className="h-1.5 bg-primary" />
+              <CardContent className="flex flex-1 flex-col p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h3 className="text-xl font-bold text-slate-900">{plan.tier}</h3>
@@ -214,7 +216,8 @@ export default function Package() {
                       ? `${targetIsUpgrade ? "Upgrade" : "Downgrade"} to ${plan.tier}`
                       : `Choose ${plan.tier}`}
               </button>
-            </section>
+              </CardContent>
+            </Card>
           );
         })}
       </div>

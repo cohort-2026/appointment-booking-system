@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../../../hooks/useAuth";
 import { apiFetch } from "../../../services/api";
+import { Card } from "@/components/ui/card";
+import BusinessStaffCalendar from "../../../components/calendar/BusinessStaffCalendar";
 
 const ACCENT_FROM = "#0EA5E9";
 const ACCENT_TO = "#38BDF8";
@@ -144,21 +146,6 @@ const navItems: NavItem[] = [
   { label: "Profile", icon: Icons.Profile, path: "/dashboard/business/profile" },
 ];
 
-const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const CALENDAR_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const CALENDAR_HOURS = [
-  "08:00 AM",
-  "09:00 AM",
-  "10:00 AM",
-  "11:00 AM",
-  "12:00 PM",
-  "01:00 PM",
-  "02:00 PM",
-  "03:00 PM",
-  "04:00 PM",
-  "05:00 PM",
-];
-
 const DEFAULT_SCHEDULE: Record<string, WorkingDay> = {
   Monday: { working: true, start: "09:00", end: "17:00" },
   Tuesday: { working: true, start: "09:00", end: "17:00" },
@@ -201,7 +188,6 @@ export default function BusinessStaff() {
   const [activeTab, setActiveTab] = useState<"CALENDAR" | "SERVICES" | "HOURS">("CALENDAR");
   const [assignedServiceIds, setAssignedServiceIds] = useState<string[]>([]);
   const [staffSchedule, setSchedule] = useState<Record<string, WorkingDay>>(DEFAULT_SCHEDULE);
-  const [blockedSlots, setBlockedSlots] = useState<string[]>(["Wed-02:00 PM", "Fri-04:00 PM"]);
   const [isSavingManage, setIsSavingManage] = useState(false);
 
   useEffect(() => {
@@ -327,13 +313,6 @@ export default function BusinessStaff() {
       ...prev,
       [day]: { ...prev[day], ...patch } as WorkingDay,
     }));
-  };
-
-  const toggleBlockSlot = (slotKey: string) => {
-    setBlockedSlots((prev) =>
-      prev.includes(slotKey) ? prev.filter((k) => k !== slotKey) : [...prev, slotKey]
-    );
-    toast.success("Calendar slot availability toggled.");
   };
 
   const handleSaveQualifications = async () => {
@@ -510,7 +489,7 @@ export default function BusinessStaff() {
 
         <div className="p-4 sm:p-6 lg:p-8">
           {/* Search Bar & Action Toolbar (Add Staff button placed below) */}
-          <section className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <section className="mb-6 flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="relative flex-1 max-w-md">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
                 <Icons.Search />
@@ -540,11 +519,12 @@ export default function BusinessStaff() {
           </section>
 
           {/* Staff Roster Table with Skeletons */}
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <Card className="gap-0 overflow-hidden rounded-lg py-0 shadow-sm">
+            <div className="h-1.5 bg-primary" />
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/70 text-xs font-bold uppercase tracking-wider text-slate-400">
+                  <tr className="border-b border-slate-100 bg-sky-50/50 text-xs font-bold uppercase tracking-wider text-slate-500">
                     <th className="px-6 py-4">Name</th>
                     <th className="px-6 py-4">Role / Title</th>
                     <th className="px-6 py-4">Appointments Today</th>
@@ -581,8 +561,8 @@ export default function BusinessStaff() {
                           <div className="ml-auto h-8 w-44 rounded-xl bg-slate-200" />
                         </td>
                       </tr>
-                    ))
-                  ) : filteredStaff.length === 0 ? (
+                    )))
+                  : filteredStaff.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-12 text-center text-sm text-slate-500">
                         {searchQuery ? "No staff members match your search." : "No staff members on roster yet."}
@@ -670,7 +650,7 @@ export default function BusinessStaff() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
         </div>
 
         {/* Consistent Footer */}
@@ -909,128 +889,7 @@ export default function BusinessStaff() {
 
             {/* --- TAB 1: THE ACTUAL WEEKLY TIME-GRID CALENDAR --- */}
             {activeTab === "CALENDAR" && (
-              <div className="mt-6">
-                {/* Calendar Bar */}
-                <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Week View:</span>
-                    <span className="text-sm font-bold text-slate-800">Monday – Saturday</span>
-                    <span className="rounded-lg bg-sky-50 px-2 py-0.5 text-xs font-semibold text-[#0EA5E9]">
-                      {managingStaff.appointmentsToday} booked today
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3 text-xs">
-                    <span className="flex items-center gap-1.5 text-slate-600">
-                      <span className="h-2.5 w-2.5 rounded-sm bg-[#0F172A]" /> Booked Client
-                    </span>
-                    <span className="flex items-center gap-1.5 text-slate-600">
-                      <span className="h-2.5 w-2.5 rounded-sm bg-slate-300" /> Blocked Time Off
-                    </span>
-                    <span className="flex items-center gap-1.5 text-slate-600">
-                      <span className="h-2.5 w-2.5 rounded-sm border border-slate-300 bg-white" /> Open Slot
-                    </span>
-                  </div>
-                </div>
-
-                {/* The Actual Calendar Table Grid */}
-                <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-                  <table className="w-full border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                        <th className="w-24 border-r border-slate-200 p-3 font-bold uppercase">Time</th>
-                        {CALENDAR_DAYS.map((day) => (
-                          <th key={day} className="p-3 text-center font-bold uppercase tracking-wider border-r border-slate-100 last:border-r-0">
-                            {day}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {CALENDAR_HOURS.map((hour) => (
-                        <tr key={hour} className="h-14">
-                          {/* Time Column */}
-                          <td className="border-r border-slate-200 bg-slate-50/50 p-2 text-center font-mono font-medium text-slate-500 text-[11px]">
-                            {hour}
-                          </td>
-
-                          {/* Days Columns */}
-                          {CALENDAR_DAYS.map((day) => {
-                            const slotKey = `${day}-${hour}`;
-                            const isBlocked = blockedSlots.includes(slotKey);
-
-                            // Specific demo appointments mapped to staff calendar
-                            const isAliceBooked =
-                              (day === "Mon" && hour === "10:00 AM") ||
-                              (day === "Wed" && hour === "12:00 PM");
-                            const isRobertBooked = day === "Tue" && hour === "02:00 PM";
-
-                            if (isAliceBooked) {
-                              return (
-                                <td key={day} className="border-r border-slate-100 p-1.5 last:border-r-0 bg-sky-50/30">
-                                  <div className="flex h-full w-full flex-col justify-center rounded-xl bg-[#0F172A] p-2 text-white shadow-xs">
-                                    <span className="font-bold text-[11px] truncate">Alice H.</span>
-                                    <span className="text-[10px] text-sky-300 truncate">Haircut (30m)</span>
-                                  </div>
-                                </td>
-                              );
-                            }
-
-                            if (isRobertBooked) {
-                              return (
-                                <td key={day} className="border-r border-slate-100 p-1.5 last:border-r-0 bg-sky-50/30">
-                                  <div className="flex h-full w-full flex-col justify-center rounded-xl bg-[#0F172A] p-2 text-white shadow-xs">
-                                    <span className="font-bold text-[11px] truncate">Robert Chen</span>
-                                    <span className="text-[10px] text-sky-300 truncate">Beard Sculpt</span>
-                                  </div>
-                                </td>
-                              );
-                            }
-
-                            if (isBlocked) {
-                              return (
-                                <td key={day} className="border-r border-slate-100 p-1.5 last:border-r-0 bg-slate-50">
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleBlockSlot(slotKey)}
-                                    className="flex h-full w-full items-center justify-center rounded-xl bg-slate-200/80 p-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-300"
-                                  >
-                                    Blocked
-                                  </button>
-                                </td>
-                              );
-                            }
-
-                            return (
-                              <td key={day} className="border-r border-slate-100 p-1.5 last:border-r-0 hover:bg-sky-50/20">
-                                <button
-                                  type="button"
-                                  onClick={() => toggleBlockSlot(slotKey)}
-                                  className="flex h-full w-full items-center justify-center rounded-xl border border-dashed border-slate-200 text-[10px] font-medium text-slate-400 hover:border-[#0EA5E9] hover:text-[#0EA5E9]"
-                                  title="Click to block or reserve time"
-                                >
-                                  Available
-                                </button>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
-                  <span>Tip: Click on any open "Available" slot to quickly block it off for staff leave or lunch.</span>
-                  <button
-                    type="button"
-                    onClick={() => setManagingStaff(null)}
-                    className="rounded-xl border border-slate-200 bg-white px-5 py-2 font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Close Calendar
-                  </button>
-                </div>
-              </div>
+              <BusinessStaffCalendar key={managingStaff.id} staffId={managingStaff.id} />
             )}
 
             {/* --- TAB 2: SERVICE QUALIFICATIONS --- */}
@@ -1106,7 +965,7 @@ export default function BusinessStaff() {
                 </p>
 
                 <div className="divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
-                  {DAYS_OF_WEEK.map((day) => {
+                  {Object.keys(DEFAULT_SCHEDULE).map((day) => {
                     const conf = staffSchedule[day] || { working: false, start: "09:00", end: "17:00" };
                     return (
                       <div key={day} className="flex flex-wrap items-center justify-between gap-3 py-2.5">

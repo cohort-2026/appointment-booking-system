@@ -5,10 +5,11 @@ import {
 } from "../services/customer-appointment.service.js";
 import { bookingDate, parseBookingDate, DAY_MS } from "../lib/time.js";
 import { bookedDurationMinutes, bookedPrice } from "../lib/booking-snapshot.js";
+import { MIN_RECOVERY_MINUTES } from "../lib/booking-buffer.js";
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware.js";
 import prisma from "../lib/prisma.js";
-import { BookingError, createBooking } from "../services/booking.service.js";
+import { BookingError, createBooking, createMultipleBookings, MAX_BOOKING_SLOTS } from "../services/booking.service.js";
 
 import { notifyAppointmentCreated, notifyAppointmentChanged } from "../services/appointment-notification.service.js";
 
@@ -80,6 +81,9 @@ export const getCustomerDashboard = async (
         id: appointment.id,
         time: appointment.scheduledStart,
         endsAt: appointment.scheduledEnd,
+        providerId: appointment.soleProviderId ? `sole:${appointment.soleProviderId}` : appointment.businessId ? `business:${appointment.businessId}` : null,
+        staffId: appointment.staffId,
+        bufferAfterMinutes: Math.max(appointment.bufferAfterMinutesAtBooking, MIN_RECOVERY_MINUTES),
         calendarUid: appointmentCalendarUid(appointment.id),
         canReschedule: customerChangePolicy(appointment, now).canReschedule,
         service: appointment.service.name,
@@ -147,6 +151,10 @@ export const getCustomerAppointments = async (req: AuthenticatedRequest, res: Re
     const format = (a: (typeof upcoming)[number]) => ({
       id: a.id,
       time: a.scheduledStart,
+      endsAt: a.scheduledEnd,
+      providerId: a.soleProviderId ? `sole:${a.soleProviderId}` : a.businessId ? `business:${a.businessId}` : null,
+      staffId: a.staffId,
+      bufferAfterMinutes: Math.max(a.bufferAfterMinutesAtBooking, MIN_RECOVERY_MINUTES),
       service: a.service.name,
       providerName: a.soleProvider?.displayName ?? a.business?.name ?? "Provider",
       staffName: a.staff
@@ -173,13 +181,17 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
   const body = req.body as Record<string, unknown>;
   const providerId = typeof body?.providerId === "string" ? body.providerId : "";
   const serviceId = typeof body?.serviceId === "string" ? body.serviceId : "";
-  const startsAtValue = typeof body?.startsAt === "string" ? body.startsAt : "";
+  const multiple = Array.isArray(body?.startsAt);
+  const startsAtValues: unknown[] = multiple ? body.startsAt as unknown[] : [body?.startsAt];
   const staffId = typeof body?.staffId === "string" ? body.staffId : undefined;
   const separator = providerId.indexOf(":");
   const providerKind = providerId.slice(0, separator);
   const id = providerId.slice(separator + 1);
 
-  if (!id || (providerKind !== "sole" && providerKind !== "business") || !serviceId || !startsAtValue) {
+  if (!id || (providerKind !== "sole" && providerKind !== "business") || !serviceId ||
+      startsAtValues.length < 1 || startsAtValues.length > MAX_BOOKING_SLOTS ||
+      startsAtValues.some(value => typeof value !== "string" || !value) ||
+      (multiple && body.mode !== "separate" && body.mode !== "combined")) {
     return res.status(400).json({ success: false, message: "Provider, service, and appointment time are required" });
   }
   if ((providerKind === "business" && !staffId) || (providerKind === "sole" && staffId)) {
@@ -191,30 +203,32 @@ export const createCustomerAppointment = async (req: AuthenticatedRequest, res: 
     return res.status(400).json({ success: false, message: "Notes must be text of at most 500 characters" });
   }
   const customerNotes = typeof body.customerNotes === "string" ? body.customerNotes.trim() || null : null;
-  const startsAt = new Date(startsAtValue);
-  if (!Number.isFinite(startsAt.getTime())) {
+  const startsAt = startsAtValues.map(value => new Date(value as string));
+  if (startsAt.some(value => !Number.isFinite(value.getTime()))) {
     return res.status(400).json({ success: false, message: "Choose a valid appointment time" });
   }
-  if (!/(Z|[+-]\d{2}:\d{2})$/i.test(startsAtValue)) {
+  if (startsAtValues.some(value => !/(Z|[+-]\d{2}:\d{2})$/i.test(value as string))) {
     return res.status(400).json({ success: false, message: "Appointment time must include a timezone offset" });
   }
 
   try {
-    const appointment = await createBooking({ customerId: req.user!.userId, providerKind,
-      providerId: id, serviceId, startsAt, customerNotes, ...(staffId ? { staffId } : {}) });
+    const input = { customerId: req.user!.userId, providerKind: providerKind as "sole" | "business",
+      providerId: id, serviceId, customerNotes, ...(staffId ? { staffId } : {}) };
+    const appointments = multiple
+      ? await createMultipleBookings({ ...input, startsAt, mode: body.mode as "separate" | "combined" })
+      : [await createBooking({ ...input, startsAt: startsAt[0]! })];
 
-    await notifyAppointmentCreated(appointment);
+    await Promise.all(appointments.map(appointment => notifyAppointmentCreated(appointment)));
 
-    return res.status(201).json({
-      success: true,
-      appointment: {
+    const format = (appointment: (typeof appointments)[number]) => ({
         id: appointment.id,
         service: appointment.service.name,
         durationMinutes: bookedDurationMinutes(appointment),
         startsAt: appointment.scheduledStart,
         status: appointment.status,
-      },
     });
+    return res.status(201).json({ success: true,
+      ...(multiple ? { appointments: appointments.map(format) } : { appointment: format(appointments[0]!) }) });
   } catch (error) {
     if (error instanceof BookingError) {
       return res.status(error.status).json({ success: false, message: error.message });

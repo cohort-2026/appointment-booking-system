@@ -26,7 +26,6 @@ import BusinessRegister from "../pages/public/register/BusinessRegister";
 
 // Customer dashboard
 import CustomerDashboard from "../pages/dashboard/customer/Dashboard";
-import CustomerBook from "../pages/dashboard/customer/Book";
 import CustomerAppointments from "../pages/dashboard/customer/Appointments";
 import CustomerAppointmentDetails from "../pages/dashboard/customer/AppointmentDetails";
 import CustomerProfile from "../pages/dashboard/customer/Profile";
@@ -96,7 +95,7 @@ export default function AppRoutes() {
         }
       >
         <Route index element={<CustomerDashboard />} />
-        <Route path="book" element={<CustomerBook />} />
+        <Route path="book" element={<Providers dashboard />} />
         <Route path="book/:id" element={<ProviderProfile dashboard />} />
         <Route path="appointments" element={<CustomerAppointments />} />
         <Route path="appointments/:id" element={<CustomerAppointmentDetails />} />

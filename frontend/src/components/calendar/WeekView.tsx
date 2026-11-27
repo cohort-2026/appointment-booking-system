@@ -1,116 +1,69 @@
-// src/components/calendar/WeekView.tsx
-import { useMemo } from "react";
+import { sastDate } from "../../lib/bookingTime";
+import AppointmentHistoryDrawer from "../booking/AppointmentHistoryDrawer";
+import { calendarTimeRange, layoutCalendarDay, type CalendarAppointment, type CalendarAvailability } from "./calendarLayout";
 
-export type Appointment = {
-  id: string;
-  customerName: string;
-  serviceName: string;
-  date: string; // ISO string e.g., "2023-10-25T14:30:00Z"
-  status: string;
-};
+export type Appointment = CalendarAppointment;
 
 type WeekViewProps = {
   currentDate: Date;
   appointments: Appointment[];
+  availability: CalendarAvailability[];
+  onSaved?: () => void;
+  role?: "provider" | "business";
 };
 
-export default function WeekView({ currentDate, appointments }: WeekViewProps) {
-  // Work hours (8 AM to 6 PM)
-  const START_HOUR = 8;
-  const END_HOUR = 18;
-  const HOURS = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
+const HOUR_HEIGHT = 64;
+const timeFormatter = new Intl.DateTimeFormat("en-ZA", {
+  timeZone: "Africa/Johannesburg", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
 
-  // 1. Calculate the 7 days of the current week (starting on Sunday)
-  const weekDays = useMemo(() => {
-    const startOfWeek = new Date(currentDate);
-    const day = startOfWeek.getDay(); // 0 is Sunday
-    startOfWeek.setDate(startOfWeek.getDate() - day); // Go back to Sunday
-    
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(startOfWeek);
-      d.setDate(startOfWeek.getDate() + i);
-      return d;
-    });
-  }, [currentDate]);
-
-  // 2. Helper to position the appointment block based on its time
-  const getAppointmentStyle = (dateString: string) => {
-    const date = new Date(dateString);
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-
-    // Calculate how far from the top the appointment should be
-    // 1 hour = 60px height. So 1 minute = 1px.
-    const topOffset = (hours - START_HOUR) * 64 + (minutes);
-    
-    return {
-      top: `${topOffset}px`,
-      height: "60px", // Assuming most appointments are 1 hour for now
-    };
-  };
+export default function WeekView({ currentDate, appointments, availability, onSaved, role = "provider" }: WeekViewProps) {
+  const currentDay = new Date(`${sastDate(currentDate)}T00:00:00Z`);
+  currentDay.setUTCDate(currentDay.getUTCDate() - currentDay.getUTCDay());
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(currentDay.getTime() + index * 86_400_000);
+    return { key: day.toISOString().slice(0, 10), date: day };
+  });
+  const today = sastDate();
+  const range = calendarTimeRange(availability, appointments, days.map(day => day.key));
+  if (!range) return <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">No working hours or appointments for this week.</div>;
+  const hours = Array.from({ length: Math.ceil((range.end - range.start) / 60) }, (_, index) => range.start + index * 60);
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col w-full h-[min(700px,calc(100vh_-_20rem))] min-h-[360px]">
-      {/* Header Row (Days) */}
-      <div className="grid grid-cols-8 border-b border-slate-200 bg-slate-50">
-        <div className="p-3 text-xs font-semibold text-slate-400 text-center border-r border-slate-200 flex items-center justify-center">
-          Time
-        </div>
-        {weekDays.map((day, idx) => {
-          const isToday = new Date().toDateString() === day.toDateString();
-          return (
-            <div key={idx} className="p-3 text-center border-r border-slate-200 last:border-r-0">
-              <p className="text-xs font-semibold text-slate-500 uppercase">
-                {day.toLocaleDateString('default', { weekday: 'short' })}
-              </p>
-              <p className={`text-lg font-bold mt-1 inline-flex items-center justify-center h-8 w-8 rounded-full ${isToday ? 'bg-sky-500 text-white' : 'text-slate-800'}`}>
-                {day.getDate()}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Scrollable Grid Area */}
-      <div className="flex-1 overflow-y-auto relative">
-        <div className="grid grid-cols-8 h-full">
-          
-          {/* Time Column */}
-          <div className="border-r border-slate-200 bg-slate-50/50">
-            {HOURS.map((hour) => (
-              <div key={hour} className="h-[64px] border-b border-slate-100 pr-2 text-right pt-2">
-                <span className="text-xs font-medium text-slate-400">
-                  {hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
-                </span>
-              </div>
-            ))}
+    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="h-1.5 bg-primary" />
+      <div className="overflow-x-auto">
+        <div className="min-w-[800px]">
+          <div className="grid grid-cols-[64px_repeat(7,minmax(0,1fr))] border-b border-slate-200 bg-sky-50/50">
+            <div className="flex items-center justify-center border-r border-slate-200 text-xs font-semibold text-slate-500">SAST</div>
+            {days.map(day => <div key={day.key} className="border-r border-slate-200 p-3 text-center last:border-r-0">
+              <p className="text-xs font-semibold uppercase text-slate-500">{day.date.toLocaleDateString("en-ZA", { weekday: "short", timeZone: "UTC" })}</p>
+              <p className={`mx-auto mt-1 grid size-8 place-items-center rounded-full text-sm font-bold ${day.key === today ? "bg-sky-600 text-white" : "text-slate-800"}`}>{day.date.getUTCDate()}</p>
+            </div>)}
           </div>
-
-          {/* Days Columns */}
-          {weekDays.map((day, idx) => (
-            <div key={idx} className="border-r border-slate-200 last:border-r-0 relative">
-              {/* Background Grid Lines */}
-              {HOURS.map((hour) => (
-                <div key={hour} className="h-[64px] border-b border-slate-100" />
-              ))}
-
-              {/* Render Appointments for this day */}
-              {appointments
-                .filter(apt => new Date(apt.date).toDateString() === day.toDateString())
-                .map(apt => (
-                  <div
-                    key={apt.id}
-                    className="absolute left-1 right-1 bg-sky-100 border border-sky-300 text-sky-900 rounded px-2 py-1 text-xs overflow-hidden shadow-sm hover:z-10 hover:shadow-md cursor-pointer transition"
-                    style={getAppointmentStyle(apt.date)}
-                    title={`${apt.serviceName} with ${apt.customerName}`}
-                  >
-                    <p className="font-bold truncate">{apt.customerName}</p>
-                    <p className="truncate">{apt.serviceName}</p>
-                  </div>
-                ))}
+          <div className="max-h-[min(700px,65vh)] overflow-y-auto">
+            <div className="grid grid-cols-[64px_repeat(7,minmax(0,1fr))]">
+              <div className="border-r border-slate-200 bg-slate-50/50">{hours.map(minute => <div key={minute} style={{ height: Math.min(60, range.end - minute) * HOUR_HEIGHT / 60 }} className="border-b border-slate-100 pr-2 pt-1 text-right text-xs text-slate-500">{String(Math.floor(minute / 60)).padStart(2, "0")}:{String(minute % 60).padStart(2, "0")}</div>)}</div>
+              {days.map(day => <div key={day.key} className="relative border-r border-slate-200 last:border-r-0" style={{ height: (range.end - range.start) * HOUR_HEIGHT / 60 }}>
+                {hours.map(minute => <div key={minute} style={{ height: Math.min(60, range.end - minute) * HOUR_HEIGHT / 60 }} className="border-b border-slate-100" />)}
+                {layoutCalendarDay(appointments, day.key).map(block => {
+                  const { appointment } = block;
+                  const start = timeFormatter.format(new Date(appointment.date));
+                  const end = timeFormatter.format(new Date(appointment.endsAt!));
+                  return <AppointmentHistoryDrawer key={appointment.id} id={appointment.id} role={role} startsAt={appointment.date}
+                    title={`${appointment.serviceName} · ${appointment.customerName}`} onSaved={() => onSaved?.()}
+                    trigger={<button type="button" className="absolute overflow-hidden rounded border border-sky-300 bg-sky-100 px-1 text-left text-xs text-sky-950 hover:bg-sky-200 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-sky-700" style={{
+                    top: (block.startMinute - range.start) * HOUR_HEIGHT / 60,
+                    height: (block.endMinute - block.startMinute) * HOUR_HEIGHT / 60,
+                    left: `${block.column * 100 / block.columns}%`, width: `${100 / block.columns}%`,
+                  }} title={`${start} - ${end} SAST: ${appointment.serviceName} with ${appointment.customerName}`} aria-label={`${start} to ${end} SAST, ${appointment.serviceName}, ${appointment.customerName}`}>
+                    <span className="block truncate font-semibold">{start} {appointment.customerName}</span>
+                    <span className="block truncate">{appointment.serviceName}</span>
+                  </button>} />;
+                })}
+              </div>)}
             </div>
-          ))}
-
+          </div>
         </div>
       </div>
     </div>

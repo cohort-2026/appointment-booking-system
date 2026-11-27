@@ -105,8 +105,8 @@ export function generateAppointmentSlots(input: {
     return { start: booking.start, serviceEnd, occupiedMinutes, end: start + occupiedMinutes * 60_000 };
   });
   const slots: AppointmentSlot[] = [];
-  for (const [start, end] of merged) {
-    for (let minute = Math.ceil(start / 15) * 15; minute < end; minute += 15) {
+  for (const [index, [start, end]] of merged.entries()) {
+    for (let minute = start; minute < end; minute += duration) {
       const startsAt = new Date(date.getTime() + minute * 60_000);
       if (startsAt <= now) continue;
       const instant = startsAt.getTime();
@@ -118,7 +118,8 @@ export function generateAppointmentSlots(input: {
         slots.push({ startsAt, status: "BOOKED", recoveryUntil: new Date(recoveryEnd) });
         continue;
       }
-      if (minute + duration > end) continue;
+      const requiredMinutes = index === merged.length - 1 ? input.durationMinutes : duration;
+      if (minute + requiredMinutes > end) continue;
       const isBooked = occupied.some(booking =>
         timeRangesOverlap(startsAt, duration, booking.start, booking.occupiedMinutes));
       slots.push({ startsAt, status: isBooked ? "BOOKED" : "AVAILABLE" });

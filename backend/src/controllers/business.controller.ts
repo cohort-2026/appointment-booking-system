@@ -590,6 +590,34 @@ export const inviteBusinessStaff = async (req: AuthenticatedRequest, res: Respon
   }
 };
 
+export const getBusinessStaffCalendar = async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const staffId = typeof req.params.staffId === "string" ? req.params.staffId : "";
+    const staff = await prisma.businessStaff.findFirst({
+      where: { id: staffId, business: { ownerUserId: req.user!.userId } },
+      select: { id: true, availability: true, business: { select: { id: true, availability: true } } },
+    });
+    if (!staff) return res.status(404).json({ success: false, message: "Staff member not found" });
+    const { intersectAvailabilityWindows } = await import("../services/availability.service.js");
+    const availability = Array.from({ length: 7 }, (_, day) =>
+      intersectAvailabilityWindows(staff.business.availability, staff.availability, day)).flat();
+    const appointments = await prisma.appointment.findMany({
+      where: { businessId: staff.business.id, staffId: staff.id, status: { in: ["CONFIRMED", "RESCHEDULED"] } },
+      orderBy: { scheduledStart: "asc" },
+      include: { customer: { select: { firstName: true, lastName: true } }, service: { select: { name: true, durationMinutes: true } } },
+    });
+    return res.json({ success: true, availability, appointments: appointments.map(appointment => ({
+      id: appointment.id, date: appointment.scheduledStart,
+      endsAt: appointment.scheduledEnd ?? new Date(appointment.scheduledStart.getTime() + appointment.service.durationMinutes * 60_000),
+      customerName: `${appointment.customer.firstName} ${appointment.customer.lastName ?? ""}`.trim(),
+      serviceName: appointment.service.name, status: appointment.status,
+    })) });
+  } catch (error) {
+    console.error("Business staff calendar fetch error:", error);
+    return res.status(500).json({ success: false, message: "Unable to load staff calendar" });
+  }
+};
+
 export const getBusinessAppointments = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const business = await prisma.business.findUnique({

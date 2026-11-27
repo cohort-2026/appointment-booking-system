@@ -43,6 +43,20 @@ export function createAppointment(input: {
   });
 }
 
+export function createMultipleAppointments(input: {
+  customerNotes?: string;
+  providerId: string;
+  serviceId: string;
+  startsAt: string[];
+  mode: "separate" | "combined";
+  staffId?: string;
+}) {
+  return apiFetch<{
+    success: boolean;
+    appointments: { id: string; service: string; durationMinutes: number; startsAt: string; status: string }[];
+  }>("/customer/appointments", { method: "POST", body: JSON.stringify(input) });
+}
+
 
 export type AppointmentEvent = {
   id: string; type: string; actor: string; createdAt: string; reason: string | null;
